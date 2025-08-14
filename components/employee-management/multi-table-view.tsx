@@ -34,10 +34,20 @@ import {
   placementHistories,
   assistanceHistories,
   auditAssignments,
+  accountsapi,
 } from "@/lib/employee-management-data"
 import AccountsAnalytics from "./accounts-analytics"
 import FamilyAnalytics from "./family-analytics"
 import EducationAnalytics from "./education-analytics"
+import PlacementAnalytics from "./placement-analytic"
+import dayjs from "dayjs";
+import duration from "dayjs/plugin/duration";
+import customParseFormat from "dayjs/plugin/customParseFormat";
+
+// extend plugin
+dayjs.extend(duration);
+dayjs.extend(customParseFormat);
+
 
 export default function MultiTableView() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -57,6 +67,19 @@ export default function MultiTableView() {
     const limit = Number.parseInt(entriesPerPage)
     return data.slice(0, limit)
   }
+
+  const daysDifference = (tanggalMasuk: string | Date) => {
+    const now = dayjs();
+    
+    // Kalau string, parse sesuai format dd-mm-yyyy
+    const masuk = typeof tanggalMasuk === "string" 
+      ? dayjs(tanggalMasuk, "DD-MM-YYYY")
+      : dayjs(tanggalMasuk);
+  
+    const diff = dayjs.duration(now.diff(masuk));
+  
+    return `${diff.years()} tahun ${diff.months()} bulan ${diff.days()} hari`;
+  };
 
   const renderTableControls = () => (
     <div className="flex flex-col sm:flex-row gap-4 mb-6">
@@ -538,13 +561,15 @@ export default function MultiTableView() {
 
         {/* Placement History Tab */}
         <TabsContent value="placements">
+       
+        <PlacementAnalytics />
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <MapPin className="w-5 h-5" />
-                Placement History
+                Masa Kerja
               </CardTitle>
-              <CardDescription>Employee placement locations and assignments</CardDescription>
+              <CardDescription>Masa Kerja Pegawai di Kalimantan Utara</CardDescription>
             </CardHeader>
             <CardContent>
               {renderTableControls()}
@@ -552,39 +577,66 @@ export default function MultiTableView() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Employee</TableHead>
-                      <TableHead>Location</TableHead>
-                      <TableHead>Start Date</TableHead>
-                      <TableHead>End Date</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Actions</TableHead>
+                      <TableHead>No</TableHead>
+                      <TableHead>Nama</TableHead>
+                      <TableHead>Satuan kerja</TableHead>
+                      <TableHead>Tanggal Masuk</TableHead>
+                      {/* <TableHead>Tanggal Keluar</TableHead> */}
+                      <TableHead>Lama Penempatan</TableHead>
+                
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {paginateData(filterData(placementHistories, ["name", "location"])).map((placement) => (
-                      <TableRow key={placement.id} className="hover:bg-muted/50">
-                        <TableCell className="font-medium">{placement.name}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <MapPin className="w-4 h-4 text-muted-foreground" />
-                            {placement.location}
-                          </div>
-                        </TableCell>
-                        <TableCell>{placement.start}</TableCell>
-                        <TableCell>{placement.to || "Present"}</TableCell>
-                        <TableCell>
-                          <Badge variant={!placement.to ? "default" : "secondary"}>
-                            {!placement.to ? "Current" : "Completed"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Button variant="ghost" size="sm">
-                            Edit
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
+                      {paginateData(
+                      // filterData(accountsapi, ["account_name"]).
+                      filterData(accountsapi, ["account_name"])
+                        // hanya pegawai yang punya penempatan aktif (tanggal_keluar null)
+                       
+                        .filter(acc =>
+                          acc.account_penempatan.some(p => p.tanggal_keluar === null) &&
+                          acc.account_jabatan.length > 0 &&
+                          acc.account_jabatan[0].name &&
+                          acc.account_jabatan[0].name.trim() !== '-'
+                        )
+                        
+                        .sort((a, b) => {
+                          const diffA = dayjs().diff(
+                            dayjs(a.account_penempatan[0]?.tanggal_masuk, "DD-MM-YYYY"),
+                            'day'
+                          );
+                          const diffB = dayjs().diff(
+                            dayjs(b.account_penempatan[0]?.tanggal_masuk, "DD-MM-YYYY"),
+                            'day'
+                          );
+                          
+                          return diffB - diffA; // urut dari penempatan terlama
+                        })
+                        // urutkan dari lama penempatan terlama
+                        // .sort((a, b) => {
+                        //   const lamaA = daysDifference(a.account_penempatan[0]?.tanggal_masuk);
+                        //   const lamaB = daysDifference(b.account_penempatan[0]?.tanggal_masuk);
+                        //   return lamaB - lamaA;
+                        // })
+                      ).map((acc, index) => {
+                      const penempatanAktif = acc.account_penempatan.find(
+                        ( p: { tanggal_keluar: null }) => p.tanggal_keluar === null
+                      );
+
+                      return (
+                        <TableRow key={acc.id} className="hover:bg-muted/50">
+                          <TableCell>{index + 1}</TableCell>
+                          <TableCell className="font-medium">{acc.account_name}</TableCell>
+                          <TableCell>{penempatanAktif?.satuan_kerja || "-"}</TableCell>
+                          <TableCell>{penempatanAktif?.tanggal_masuk || "-"}</TableCell>
+                          <TableCell>
+                            {penempatanAktif
+                              ? daysDifference(penempatanAktif.tanggal_masuk)
+                              : "-"}
+                          </TableCell>
+                        </TableRow>
+                      );
+                      })}
+                    </TableBody>
                 </Table>
               </div>
             </CardContent>
