@@ -1,47 +1,59 @@
 "use client";
+
 import { useState } from "react";
-import api from "@/lib/axios";
+import { useRouter } from "next/navigation";
+import { api } from "@/lib/axios";
 
 export default function LoginPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [message, setMessage] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = async (e:any) => {
+  const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    setErr(null);
+    setLoading(true);
     try {
-      // perlu call CSRF dulu (Sanctum)
-      await api.get("/sanctum/csrf-cookie");
-      await api.post("/api/login", { email, password });
-      setMessage("Login success!");
-    } catch (err) {
-      setMessage("Login failed!");
+      await api.post("/api/login", { email, password }); // cookie akan diset oleh laravel
+     console.log("test");
+    //   router.push("/dashboard");
+    } catch (e: any) {
+      setErr(e?.response?.data?.message || "Login gagal");
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="flex items-center justify-center h-screen">
-      <form onSubmit={handleLogin} className="p-6 border rounded max-w-sm w-full">
-        <h2 className="text-xl font-bold mb-4">Login</h2>
+    <main className="min-h-screen flex items-center justify-center p-6">
+      <form onSubmit={onSubmit} className="w-full max-w-sm space-y-4">
+        <h1 className="text-2xl font-semibold">Login</h1>
+        {err && <p className="text-red-600 text-sm">{err}</p>}
         <input
+          className="w-full border px-3 py-2 rounded"
+          placeholder="email"
           type="email"
-          placeholder="Email"
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="w-full mb-2 p-2 border rounded"
+          onChange={(e) => setEmail(e.target.value)} // <— e bertipe otomatis
+          required
         />
         <input
+          className="w-full border px-3 py-2 rounded"
+          placeholder="password"
           type="password"
-          placeholder="Password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="w-full mb-2 p-2 border rounded"
+          required
         />
-        <button className="bg-blue-500 text-white px-4 py-2 rounded w-full">
-          Login
+        <button
+          disabled={loading}
+          className="w-full bg-black text-white py-2 rounded disabled:opacity-50"
+        >
+          {loading ? "Signing in..." : "Sign in"}
         </button>
-        {message && <p className="mt-2 text-center">{message}</p>}
       </form>
-    </div>
+    </main>
   );
 }
