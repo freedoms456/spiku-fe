@@ -1,9 +1,13 @@
+"use client";
 import React from "react";
+import { useAuth } from "@/hooks/use-auth";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 
+
 export default function Homepage() {
+   const { user, loading,logout } = useAuth({ redirectTo: "/login" });
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-50 to-white p-6">
       {/* Heading */}

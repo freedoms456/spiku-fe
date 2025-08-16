@@ -15,10 +15,23 @@ export default function LoginPage() {
     e.preventDefault();
     setErr(null);
     setLoading(true);
+
     try {
-      await api.post("/api/login", { email, password }); // cookie akan diset oleh laravel
-     console.log("test");
-    //   router.push("/dashboard");
+      // ambil csrf cookie dulu kalau pakai sanctum
+      await api.get("/sanctum/csrf-cookie", { withCredentials: true });
+
+      // login ke backend
+      const res = await api.post(
+        "/api/login",
+        { email, password },
+        { withCredentials: true }
+      );
+
+      // simpan user di localStorage
+      localStorage.setItem("user", JSON.stringify(res.data));
+
+      // redirect ke halaman setelah login
+      router.push("/homepage");
     } catch (e: any) {
       setErr(e?.response?.data?.message || "Login gagal");
     } finally {
@@ -36,7 +49,7 @@ export default function LoginPage() {
           placeholder="email"
           type="email"
           value={email}
-          onChange={(e) => setEmail(e.target.value)} // <— e bertipe otomatis
+          onChange={(e) => setEmail(e.target.value)}
           required
         />
         <input
