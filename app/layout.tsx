@@ -15,15 +15,19 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
-        <style>{`
-html {
-  font-family: ${GeistSans.style.fontFamily};
-  --font-sans: ${GeistSans.variable};
-  --font-mono: ${GeistMono.variable};
-}
-        `}</style>
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `
+              html {
+                font-family: ${GeistSans.style.fontFamily};
+                --font-sans: ${GeistSans.variable};
+                --font-mono: ${GeistMono.variable};
+              }
+            `,
+          }}
+        />
       </head>
       <body>{children}</body>
     </html>

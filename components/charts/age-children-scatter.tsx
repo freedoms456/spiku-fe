@@ -16,7 +16,7 @@ export default function AgeChildrenScatter() {
     children: employee.numberOfChildren,
     name: employee.name,
     employee: employee,
-  }))sdsdds
+  }))
 
   const handleScatterClick = (data: any) => {
     if (data && data.payload) {
