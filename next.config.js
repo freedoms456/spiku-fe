@@ -8,4 +8,8 @@ module.exports = {
       cert: fs.readFileSync(path.resolve(__dirname, "certs/localhost-cert.pem")),
     },
   },
+  images: {
+    domains: ["sisdm.bpk.go.id"],
+  },
 };
+

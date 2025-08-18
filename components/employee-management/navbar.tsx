@@ -17,9 +17,10 @@ import { Input } from "@/components/ui/input"
 interface NavbarProps {
   onGlobalSearch?: (query: string) => void
   searchQuery?: string
+  showSearchBar?: boolean
 }
 
-export default function Navbar({ onGlobalSearch, searchQuery = "" }: NavbarProps) {
+export default function Navbar({ onGlobalSearch, searchQuery = "" , showSearchBar = true}: NavbarProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
 
   const handleSearch = (query: string) => {
@@ -27,6 +28,8 @@ export default function Navbar({ onGlobalSearch, searchQuery = "" }: NavbarProps
       onGlobalSearch(query)
     }
   }
+
+  
 
   return (
     <nav className="bg-white border-b border-gray-200 shadow-sm">
@@ -43,26 +46,28 @@ export default function Navbar({ onGlobalSearch, searchQuery = "" }: NavbarProps
             </div>
           </div>
 
-          {/* Search Bar */}
-          <div className="hidden md:block flex-1 max-w-lg mx-8">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input
-                type="text"
-                placeholder="Search by employee name across all data..."
-                className="pl-10 w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                value={searchQuery}
-                onChange={(e) => handleSearch(e.target.value)}
-              />
-              {searchQuery && (
-                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                  <Badge variant="secondary" className="text-xs">
-                    {searchQuery.length > 20 ? `${searchQuery.substring(0, 20)}...` : searchQuery}
-                  </Badge>
+          {/* Search Bar , true menampilkan, false engga*/}
+          {showSearchBar && (
+              <div className="hidden md:block flex-1 max-w-lg mx-8">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Input
+                    type="text"
+                    placeholder="Search by employee name across all data..."
+                    className="pl-10 w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                    value={searchQuery}
+                    onChange={(e) => handleSearch(e.target.value)}
+                  />
+                  {searchQuery && (
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                      <Badge variant="secondary" className="text-xs">
+                        {searchQuery.length > 20 ? `${searchQuery.substring(0, 20)}...` : searchQuery}
+                      </Badge>
+                    </div>
+                  )}
                 </div>
+              </div>
               )}
-            </div>
-          </div>
 
           {/* Right side items */}
           <div className="flex items-center space-x-4">
