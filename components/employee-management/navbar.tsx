@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { useAuth } from "@/hooks/use-auth";
 import { Database, Bell, Settings, Search, Menu, UserCircle, LogOut, ChevronDown } from "lucide-react"
 import {
   DropdownMenu,
@@ -22,6 +23,7 @@ interface NavbarProps {
 
 export default function Navbar({ onGlobalSearch, searchQuery = "" , showSearchBar = true}: NavbarProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+     const { user, loading,logout } = useAuth({ redirectTo: "/login" });
 
   const handleSearch = (query: string) => {
     if (onGlobalSearch) {
@@ -110,7 +112,9 @@ export default function Navbar({ onGlobalSearch, searchQuery = "" , showSearchBa
                   System Settings
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-red-600">
+                <DropdownMenuItem   onClick={logout} 
+                className="text-red-600">
+                 
                   <LogOut className="mr-2 h-4 w-4" />
                   Sign Out
                 </DropdownMenuItem>

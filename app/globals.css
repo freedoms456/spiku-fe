@@ -88,8 +88,6 @@
     @apply bg-background text-foreground;
   }
 }
-<<<<<<< HEAD
-=======
 
 html {
   font-family: var(--font-sans);
@@ -98,4 +96,3 @@ html {
 code, pre {
   font-family: var(--font-mono);
 }
->>>>>>> 6c284cdf65c09949b970dcf3da232917ca0dc86b

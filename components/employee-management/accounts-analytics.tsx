@@ -287,21 +287,14 @@ export default function AccountsAnalytics({
       {} as Record<string, number>,
     )
 
-<<<<<<< HEAD
-=======
     const categories = Object.keys(gradeCounts)
     const data = Object.values(gradeCounts)
 
->>>>>>> 6c284cdf65c09949b970dcf3da232917ca0dc86b
     return {
       series: [
         {
           name: "Employees",
-<<<<<<< HEAD
-          data: Object.values(gradeCounts),
-=======
           data,
->>>>>>> 6c284cdf65c09949b970dcf3da232917ca0dc86b
         },
       ],
       options: {
@@ -311,17 +304,12 @@ export default function AccountsAnalytics({
           toolbar: { show: false },
           events: {
             dataPointSelection: (event: any, chartContext: any, config: any) => {
-<<<<<<< HEAD
-              const grade = Object.keys(gradeCounts)[config.dataPointIndex]
-              setSelectedGrade(selectedGrade === grade ? null : grade)
-=======
               if (config && config.dataPointIndex >= 0 && categories[config.dataPointIndex]) {
                 const grade = categories[config.dataPointIndex]
                 const newGrade = selectedGrade === grade ? null : grade
                 setSelectedGrade(newGrade)
                 onFilterChange?.({ gender: selectedGender, grade: newGrade, unit: selectedUnit })
               }
->>>>>>> 6c284cdf65c09949b970dcf3da232917ca0dc86b
             },
           },
         },
@@ -341,11 +329,7 @@ export default function AccountsAnalytics({
           },
         },
         xaxis: {
-<<<<<<< HEAD
-          categories: Object.keys(gradeCounts),
-=======
           categories,
->>>>>>> 6c284cdf65c09949b970dcf3da232917ca0dc86b
           labels: {
             style: {
               fontSize: "11px",
