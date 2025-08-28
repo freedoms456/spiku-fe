@@ -6,8 +6,12 @@
     "build": "next build",
     "dev": "next dev",
     "lint": "next lint",
+<<<<<<< HEAD
     "start": "next start",
     "start:prod": "next start -p 4000"
+=======
+    "start": "next start"
+>>>>>>> 6c284cdf65c09949b970dcf3da232917ca0dc86b
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
@@ -40,11 +44,18 @@
     "@radix-ui/react-tooltip": "1.1.6",
     "apexcharts": "latest",
     "autoprefixer": "^10.4.20",
+<<<<<<< HEAD
+=======
+    "axios": "^1.11.0",
+>>>>>>> 6c284cdf65c09949b970dcf3da232917ca0dc86b
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "1.0.4",
     "date-fns": "4.1.0",
+<<<<<<< HEAD
     "dayjs": "^1.11.13",
+=======
+>>>>>>> 6c284cdf65c09949b970dcf3da232917ca0dc86b
     "embla-carousel-react": "8.5.1",
     "geist": "^1.3.1",
     "input-otp": "1.4.1",

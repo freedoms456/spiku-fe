@@ -8,9 +8,17 @@ import { Users, TrendingUp, Award, Calendar, BarChart3, Activity, Target } from 
 import { accounts } from "@/lib/employee-management-data"
 import dynamic from "next/dynamic"
 
+interface AccountsAnalyticsProps {
+  filteredAccounts?: any[]
+  onFilterChange?: (filters: any) => void
+}
+
 const Chart = dynamic(() => import("react-apexcharts"), { ssr: false })
 
-export default function AccountsAnalytics() {
+export default function AccountsAnalytics({
+  filteredAccounts: propFilteredAccounts,
+  onFilterChange,
+}: AccountsAnalyticsProps = {}) {
   const [selectedGender, setSelectedGender] = useState<string | null>(null)
   const [selectedGrade, setSelectedGrade] = useState<string | null>(null)
   const [selectedUnit, setSelectedUnit] = useState<string | null>(null)
@@ -25,10 +33,15 @@ export default function AccountsAnalytics() {
       age--
     }
     return age
+    return age
   }
 
   // Get filtered accounts based on selections
   const getFilteredAccounts = () => {
+    if (propFilteredAccounts) {
+      return propFilteredAccounts
+    }
+
     let filtered = accounts
 
     if (selectedGender) {
@@ -49,28 +62,58 @@ export default function AccountsAnalytics() {
   // Gender Distribution Chart
   const getGenderDistribution = () => {
     const filteredAccounts = getFilteredAccounts()
+    if (!filteredAccounts || filteredAccounts.length === 0) {
+      return {
+        series: [],
+        options: {
+          chart: { type: "donut" as const, height: 350 },
+          labels: [],
+          noData: { text: "No data available" },
+        },
+      }
+    }
+
     const genderCounts = filteredAccounts.reduce(
       (acc, account) => {
-        acc[account.account_jenis_kelamin] = (acc[account.account_jenis_kelamin] || 0) + 1
+        const gender = account.account_jenis_kelamin || "Unknown"
+        acc[gender] = (acc[gender] || 0) + 1
         return acc
       },
       {} as Record<string, number>,
     )
 
+    const labels = Object.keys(genderCounts)
+    const series = Object.values(genderCounts)
+
+    if (labels.length === 0 || series.length === 0) {
+      return {
+        series: [],
+        options: {
+          chart: { type: "donut" as const, height: 350 },
+          labels: [],
+          noData: { text: "No data available" },
+        },
+      }
+    }
+
     return {
-      series: Object.values(genderCounts),
+      series,
       options: {
         chart: {
           type: "donut" as const,
           height: 350,
           events: {
             dataPointSelection: (event: any, chartContext: any, config: any) => {
-              const gender = Object.keys(genderCounts)[config.dataPointIndex]
-              setSelectedGender(selectedGender === gender ? null : gender)
+              if (config && config.dataPointIndex >= 0 && labels[config.dataPointIndex]) {
+                const gender = labels[config.dataPointIndex]
+                const newGender = selectedGender === gender ? null : gender
+                setSelectedGender(newGender)
+                onFilterChange?.({ gender: newGender, grade: selectedGrade, unit: selectedUnit })
+              }
             },
           },
         },
-        labels: Object.keys(genderCounts),
+        labels,
         colors: ["#3B82F6", "#EC4899"],
         title: {
           text: "Gender Distribution",
@@ -122,7 +165,21 @@ export default function AccountsAnalytics() {
   // Age Distribution Chart
   const getAgeDistribution = () => {
     const filteredAccounts = getFilteredAccounts()
-    const ages = filteredAccounts.map((account) => calculateAge(account.account_tanggal_lahir))
+    if (!filteredAccounts || filteredAccounts.length === 0) {
+      return {
+        series: [{ name: "Employees", data: [] }],
+        options: {
+          chart: { type: "column" as const, height: 350 },
+          xaxis: { categories: [] },
+          noData: { text: "No data available" },
+        },
+      }
+    }
+
+    const ages = filteredAccounts
+      .filter((account) => account.account_tanggal_lahir)
+      .map((account) => calculateAge(account.account_tanggal_lahir))
+
     const ageRanges = {
       "20-30": 0,
       "31-40": 0,
@@ -210,19 +267,41 @@ export default function AccountsAnalytics() {
   // Grade Distribution Chart
   const getGradeDistribution = () => {
     const filteredAccounts = getFilteredAccounts()
+    if (!filteredAccounts || filteredAccounts.length === 0) {
+      return {
+        series: [{ name: "Employees", data: [] }],
+        options: {
+          chart: { type: "bar" as const, height: 350 },
+          xaxis: { categories: [] },
+          noData: { text: "No data available" },
+        },
+      }
+    }
+
     const gradeCounts = filteredAccounts.reduce(
       (acc, account) => {
-        acc[account.account_golongan] = (acc[account.account_golongan] || 0) + 1
+        const grade = account.account_golongan || "Unknown"
+        acc[grade] = (acc[grade] || 0) + 1
         return acc
       },
       {} as Record<string, number>,
     )
 
+<<<<<<< HEAD
+=======
+    const categories = Object.keys(gradeCounts)
+    const data = Object.values(gradeCounts)
+
+>>>>>>> 6c284cdf65c09949b970dcf3da232917ca0dc86b
     return {
       series: [
         {
           name: "Employees",
+<<<<<<< HEAD
           data: Object.values(gradeCounts),
+=======
+          data,
+>>>>>>> 6c284cdf65c09949b970dcf3da232917ca0dc86b
         },
       ],
       options: {
@@ -232,8 +311,17 @@ export default function AccountsAnalytics() {
           toolbar: { show: false },
           events: {
             dataPointSelection: (event: any, chartContext: any, config: any) => {
+<<<<<<< HEAD
               const grade = Object.keys(gradeCounts)[config.dataPointIndex]
               setSelectedGrade(selectedGrade === grade ? null : grade)
+=======
+              if (config && config.dataPointIndex >= 0 && categories[config.dataPointIndex]) {
+                const grade = categories[config.dataPointIndex]
+                const newGrade = selectedGrade === grade ? null : grade
+                setSelectedGrade(newGrade)
+                onFilterChange?.({ gender: selectedGender, grade: newGrade, unit: selectedUnit })
+              }
+>>>>>>> 6c284cdf65c09949b970dcf3da232917ca0dc86b
             },
           },
         },
@@ -253,7 +341,11 @@ export default function AccountsAnalytics() {
           },
         },
         xaxis: {
+<<<<<<< HEAD
           categories: Object.keys(gradeCounts),
+=======
+          categories,
+>>>>>>> 6c284cdf65c09949b970dcf3da232917ca0dc86b
           labels: {
             style: {
               fontSize: "11px",
@@ -296,21 +388,35 @@ export default function AccountsAnalytics() {
   // Unit Distribution Chart
   const getUnitDistribution = () => {
     const filteredAccounts = getFilteredAccounts()
+    if (!filteredAccounts || filteredAccounts.length === 0) {
+      return {
+        series: [{ name: "Employees", data: [] }],
+        options: {
+          chart: { type: "bar" as const, height: 350 },
+          xaxis: { categories: [] },
+          noData: { text: "No data available" },
+        },
+      }
+    }
+
     const unitCounts = filteredAccounts.reduce(
       (acc, account) => {
-        const shortUnit =
-          account.account_unit.length > 20 ? account.account_unit.substring(0, 20) + "..." : account.account_unit
+        const unit = account.account_unit || "Unknown"
+        const shortUnit = unit.length > 20 ? unit.substring(0, 20) + "..." : unit
         acc[shortUnit] = (acc[shortUnit] || 0) + 1
         return acc
       },
       {} as Record<string, number>,
     )
 
+    const categories = Object.keys(unitCounts)
+    const data = Object.values(unitCounts)
+
     return {
       series: [
         {
           name: "Employees",
-          data: Object.values(unitCounts),
+          data,
         },
       ],
       options: {
@@ -320,8 +426,12 @@ export default function AccountsAnalytics() {
           toolbar: { show: false },
           events: {
             dataPointSelection: (event: any, chartContext: any, config: any) => {
-              const unit = Object.keys(unitCounts)[config.dataPointIndex]
-              setSelectedUnit(selectedUnit === unit ? null : unit)
+              if (config && config.dataPointIndex >= 0 && categories[config.dataPointIndex]) {
+                const unit = categories[config.dataPointIndex]
+                const newUnit = selectedUnit === unit ? null : unit
+                setSelectedUnit(newUnit)
+                onFilterChange?.({ gender: selectedGender, grade: selectedGrade, unit: newUnit })
+              }
             },
           },
         },
@@ -336,7 +446,7 @@ export default function AccountsAnalytics() {
           enabled: false,
         },
         xaxis: {
-          categories: Object.keys(unitCounts),
+          categories,
           labels: {
             rotate: -45,
             style: {
@@ -380,22 +490,37 @@ export default function AccountsAnalytics() {
   // Position Distribution Chart
   const getPositionDistribution = () => {
     const filteredAccounts = getFilteredAccounts()
+    if (!filteredAccounts || filteredAccounts.length === 0) {
+      return {
+        series: [],
+        options: {
+          chart: { type: "pie" as const, height: 350 },
+          labels: [],
+          noData: { text: "No data available" },
+        },
+      }
+    }
+
     const positionCounts = filteredAccounts.reduce(
       (acc, account) => {
-        acc[account.account_jabatan] = (acc[account.account_jabatan] || 0) + 1
+        const position = account.account_jabatan || "Unknown"
+        acc[position] = (acc[position] || 0) + 1
         return acc
       },
       {} as Record<string, number>,
     )
 
+    const labels = Object.keys(positionCounts)
+    const series = Object.values(positionCounts)
+
     return {
-      series: Object.values(positionCounts),
+      series,
       options: {
         chart: {
           type: "pie" as const,
           height: 350,
         },
-        labels: Object.keys(positionCounts),
+        labels,
         colors: ["#EF4444", "#10B981", "#3B82F6", "#F59E0B", "#8B5CF6", "#EC4899"],
         title: {
           text: "Position Distribution",
@@ -432,11 +557,23 @@ export default function AccountsAnalytics() {
   // Age vs Grade Correlation
   const getAgeVsGradeCorrelation = () => {
     const filteredAccounts = getFilteredAccounts()
-    const correlationData = filteredAccounts.map((account) => ({
-      x: calculateAge(account.account_tanggal_lahir),
-      y: Number.parseInt(account.account_golongan.replace(/\D/g, "")) || 1,
-      name: account.account_name,
-    }))
+    if (!filteredAccounts || filteredAccounts.length === 0) {
+      return {
+        series: [{ name: "Employees", data: [] }],
+        options: {
+          chart: { type: "scatter" as const, height: 350 },
+          noData: { text: "No data available" },
+        },
+      }
+    }
+
+    const correlationData = filteredAccounts
+      .filter((account) => account.account_tanggal_lahir && account.account_golongan)
+      .map((account) => ({
+        x: calculateAge(account.account_tanggal_lahir),
+        y: Number.parseInt(account.account_golongan.replace(/\D/g, "")) || 1,
+        name: account.account_name || "Unknown",
+      }))
 
     return {
       series: [
@@ -493,12 +630,15 @@ export default function AccountsAnalytics() {
         },
         tooltip: {
           custom: ({ series, seriesIndex, dataPointIndex, w }) => {
-            const data = correlationData[dataPointIndex]
-            return `<div class="p-3 bg-white border rounded-lg shadow-lg">
-              <strong class="text-gray-800 text-sm">${data.name}</strong><br/>
-              <span class="text-blue-600 text-xs">Age: ${data.x} years</span><br/>
-              <span class="text-green-600 text-xs">Grade: ${data.y}</span>
-            </div>`
+            if (dataPointIndex >= 0 && correlationData[dataPointIndex]) {
+              const data = correlationData[dataPointIndex]
+              return `<div class="p-3 bg-white border rounded-lg shadow-lg">
+                <strong class="text-gray-800 text-sm">${data.name}</strong><br/>
+                <span class="text-blue-600 text-xs">Age: ${data.x} years</span><br/>
+                <span class="text-green-600 text-xs">Grade: ${data.y}</span>
+              </div>`
+            }
+            return ""
           },
         },
         grid: {
@@ -520,13 +660,28 @@ export default function AccountsAnalytics() {
   // Summary Statistics
   const getSummaryStats = () => {
     const filteredAccounts = getFilteredAccounts()
+    if (!filteredAccounts || filteredAccounts.length === 0) {
+      return {
+        totalEmployees: 0,
+        maleCount: 0,
+        femaleCount: 0,
+        avgAge: 0,
+        uniqueUnits: 0,
+      }
+    }
+
     const totalEmployees = filteredAccounts.length
     const maleCount = filteredAccounts.filter((acc) => acc.account_jenis_kelamin === "Laki-laki").length
     const femaleCount = filteredAccounts.filter((acc) => acc.account_jenis_kelamin === "Perempuan").length
-    const avgAge = Math.round(
-      filteredAccounts.reduce((sum, acc) => sum + calculateAge(acc.account_tanggal_lahir), 0) / totalEmployees,
-    )
-    const uniqueUnits = new Set(filteredAccounts.map((acc) => acc.account_unit)).size
+
+    const validAges = filteredAccounts
+      .filter((acc) => acc.account_tanggal_lahir)
+      .map((acc) => calculateAge(acc.account_tanggal_lahir))
+
+    const avgAge =
+      validAges.length > 0 ? Math.round(validAges.reduce((sum, age) => sum + age, 0) / validAges.length) : 0
+
+    const uniqueUnits = new Set(filteredAccounts.map((acc) => acc.account_unit).filter(Boolean)).size
 
     return {
       totalEmployees,
@@ -543,6 +698,7 @@ export default function AccountsAnalytics() {
     setSelectedGender(null)
     setSelectedGrade(null)
     setSelectedUnit(null)
+    onFilterChange?.({ gender: null, grade: null, unit: null })
   }
 
   return (
@@ -614,7 +770,7 @@ export default function AccountsAnalytics() {
                 <p className="text-sm font-medium text-green-700">Male Employees</p>
                 <p className="text-2xl font-bold text-green-600">{stats.maleCount}</p>
                 <p className="text-xs text-green-600 mt-1">
-                  {((stats.maleCount / stats.totalEmployees) * 100).toFixed(1)}% of total
+                  {stats.totalEmployees > 0 ? ((stats.maleCount / stats.totalEmployees) * 100).toFixed(1) : 0}% of total
                 </p>
               </div>
               <Activity className="w-8 h-8 text-green-600" />
@@ -629,7 +785,8 @@ export default function AccountsAnalytics() {
                 <p className="text-sm font-medium text-pink-700">Female Employees</p>
                 <p className="text-2xl font-bold text-pink-600">{stats.femaleCount}</p>
                 <p className="text-xs text-pink-600 mt-1">
-                  {((stats.femaleCount / stats.totalEmployees) * 100).toFixed(1)}% of total
+                  {stats.totalEmployees > 0 ? ((stats.femaleCount / stats.totalEmployees) * 100).toFixed(1) : 0}% of
+                  total
                 </p>
               </div>
               <Users className="w-8 h-8 text-pink-600" />

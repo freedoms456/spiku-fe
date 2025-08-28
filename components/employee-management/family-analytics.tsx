@@ -10,13 +10,24 @@ import dynamic from "next/dynamic"
 
 const Chart = dynamic(() => import("react-apexcharts"), { ssr: false })
 
-export default function FamilyAnalytics() {
+interface FamilyAnalyticsProps {
+  filteredFamilies?: any[]
+  filteredAccounts?: any[]
+  onFilterChange?: (filters: any) => void
+}
+
+export default function FamilyAnalytics({
+  filteredFamilies: propFilteredFamilies,
+  filteredAccounts: propFilteredAccounts,
+  onFilterChange,
+}: FamilyAnalyticsProps = {}) {
   const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null)
   const [selectedLocation, setSelectedLocation] = useState<string | null>(null)
   const [selectedRelation, setSelectedRelation] = useState<string | null>(null)
 
   // Calculate age from birth date
   const calculateAge = (birthDate: string) => {
+    if (!birthDate) return 0
     const today = new Date()
     const birth = new Date(birthDate)
     let age = today.getFullYear() - birth.getFullYear()
@@ -29,10 +40,16 @@ export default function FamilyAnalytics() {
 
   // Get filtered families based on selections
   const getFilteredFamilies = () => {
+    if (propFilteredFamilies) {
+      return propFilteredFamilies
+    }
+
     let filtered = families
 
     if (selectedEmployee) {
-      const account = accounts.find((acc) => acc.account_name === selectedEmployee)
+      const account =
+        propFilteredAccounts?.find((acc) => acc.account_name === selectedEmployee) ||
+        accounts.find((acc) => acc.account_name === selectedEmployee)
       if (account) {
         filtered = filtered.filter((f) => f.account_id === account.id)
       }
@@ -51,22 +68,38 @@ export default function FamilyAnalytics() {
 
   // Family Members per Employee Chart
   const getFamilyMembersPerEmployee = () => {
-    const employeeFamilyCount = accounts.map((account) => ({
-      name: account.account_name,
+    const accountsToUse = propFilteredAccounts || accounts
+    if (!accountsToUse || accountsToUse.length === 0) {
+      return {
+        series: [],
+        options: {
+          chart: { type: "bar" as const, height: 350 },
+          xaxis: { categories: [] },
+          noData: { text: "No data available" },
+        },
+      }
+    }
+
+    const employeeFamilyCount = accountsToUse.map((account) => ({
+      name: account.account_name || "Unknown",
       count: families.filter((family) => family.account_id === account.id).length,
       sickCount: families.filter((family) => family.account_id === account.id && family.kondisi_kesehatan === "Sakit")
         .length,
     }))
 
+    const categories = employeeFamilyCount.map((item) => item.name)
+    const totalData = employeeFamilyCount.map((item) => item.count)
+    const sickData = employeeFamilyCount.map((item) => item.sickCount)
+
     return {
       series: [
         {
           name: "Total Family Members",
-          data: employeeFamilyCount.map((item) => item.count),
+          data: totalData,
         },
         {
           name: "Sick Family Members",
-          data: employeeFamilyCount.map((item) => item.sickCount),
+          data: sickData,
         },
       ],
       options: {
@@ -76,8 +109,12 @@ export default function FamilyAnalytics() {
           toolbar: { show: false },
           events: {
             dataPointSelection: (event: any, chartContext: any, config: any) => {
-              const employeeName = employeeFamilyCount[config.dataPointIndex].name
-              setSelectedEmployee(selectedEmployee === employeeName ? null : employeeName)
+              if (config && config.dataPointIndex >= 0 && categories[config.dataPointIndex]) {
+                const employeeName = categories[config.dataPointIndex]
+                const newEmployee = selectedEmployee === employeeName ? null : employeeName
+                setSelectedEmployee(newEmployee)
+                onFilterChange?.({ employee: newEmployee, location: selectedLocation, relation: selectedRelation })
+              }
             },
           },
         },
@@ -92,7 +129,7 @@ export default function FamilyAnalytics() {
           enabled: false,
         },
         xaxis: {
-          categories: employeeFamilyCount.map((item) => item.name),
+          categories,
           labels: {
             rotate: -45,
             style: {
@@ -144,28 +181,47 @@ export default function FamilyAnalytics() {
   // Relationship Distribution Chart
   const getRelationshipDistribution = () => {
     const filteredFamilies = getFilteredFamilies()
+    if (!filteredFamilies || filteredFamilies.length === 0) {
+      return {
+        series: [],
+        options: {
+          chart: { type: "donut" as const, height: 350 },
+          labels: [],
+          noData: { text: "No data available" },
+        },
+      }
+    }
+
     const relationshipCounts = filteredFamilies.reduce(
       (acc, family) => {
-        acc[family.family_hubungan] = (acc[family.family_hubungan] || 0) + 1
+        const relation = family.family_hubungan || "Unknown"
+        acc[relation] = (acc[relation] || 0) + 1
         return acc
       },
       {} as Record<string, number>,
     )
 
+    const labels = Object.keys(relationshipCounts)
+    const series = Object.values(relationshipCounts)
+
     return {
-      series: Object.values(relationshipCounts),
+      series,
       options: {
         chart: {
           type: "donut" as const,
           height: 350,
           events: {
             dataPointSelection: (event: any, chartContext: any, config: any) => {
-              const relation = Object.keys(relationshipCounts)[config.dataPointIndex]
-              setSelectedRelation(selectedRelation === relation ? null : relation)
+              if (config && config.dataPointIndex >= 0 && labels[config.dataPointIndex]) {
+                const relation = labels[config.dataPointIndex]
+                const newRelation = selectedRelation === relation ? null : relation
+                setSelectedRelation(newRelation)
+                onFilterChange?.({ employee: selectedEmployee, location: selectedLocation, relation: newRelation })
+              }
             },
           },
         },
-        labels: Object.keys(relationshipCounts),
+        labels,
         colors: ["#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899"],
         title: {
           text: "Family Relationship Distribution",
@@ -230,19 +286,34 @@ export default function FamilyAnalytics() {
   // Location Distribution Chart
   const getLocationDistribution = () => {
     const filteredFamilies = getFilteredFamilies()
+    if (!filteredFamilies || filteredFamilies.length === 0) {
+      return {
+        series: [{ name: "Family Members", data: [] }],
+        options: {
+          chart: { type: "bar" as const, height: 350 },
+          xaxis: { categories: [] },
+          noData: { text: "No data available" },
+        },
+      }
+    }
+
     const locationCounts = filteredFamilies.reduce(
       (acc, family) => {
-        acc[family.domisili_sekarang] = (acc[family.domisili_sekarang] || 0) + 1
+        const location = family.domisili_sekarang || "Unknown"
+        acc[location] = (acc[location] || 0) + 1
         return acc
       },
       {} as Record<string, number>,
     )
 
+    const categories = Object.keys(locationCounts)
+    const data = Object.values(locationCounts)
+
     return {
       series: [
         {
           name: "Family Members",
-          data: Object.values(locationCounts),
+          data,
         },
       ],
       options: {
@@ -252,8 +323,12 @@ export default function FamilyAnalytics() {
           toolbar: { show: false },
           events: {
             dataPointSelection: (event: any, chartContext: any, config: any) => {
-              const location = Object.keys(locationCounts)[config.dataPointIndex]
-              setSelectedLocation(selectedLocation === location ? null : location)
+              if (config && config.dataPointIndex >= 0 && categories[config.dataPointIndex]) {
+                const location = categories[config.dataPointIndex]
+                const newLocation = selectedLocation === location ? null : location
+                setSelectedLocation(newLocation)
+                onFilterChange?.({ employee: selectedEmployee, location: newLocation, relation: selectedRelation })
+              }
             },
           },
         },
@@ -273,7 +348,7 @@ export default function FamilyAnalytics() {
           },
         },
         xaxis: {
-          categories: Object.keys(locationCounts),
+          categories,
           labels: {
             style: {
               fontSize: "11px",
@@ -316,7 +391,21 @@ export default function FamilyAnalytics() {
   // Age Distribution Chart
   const getFamilyAgeDistribution = () => {
     const filteredFamilies = getFilteredFamilies()
-    const ages = filteredFamilies.map((family) => calculateAge(family.family_tanggal_lahir))
+    if (!filteredFamilies || filteredFamilies.length === 0) {
+      return {
+        series: [{ name: "Family Members", data: [] }],
+        options: {
+          chart: { type: "column" as const, height: 350 },
+          xaxis: { categories: [] },
+          noData: { text: "No data available" },
+        },
+      }
+    }
+
+    const ages = filteredFamilies
+      .filter((family) => family.family_tanggal_lahir)
+      .map((family) => calculateAge(family.family_tanggal_lahir))
+
     const ageRanges = {
       "0-10": 0,
       "11-20": 0,
@@ -406,22 +495,37 @@ export default function FamilyAnalytics() {
   // Health Status Chart
   const getHealthStatusChart = () => {
     const filteredFamilies = getFilteredFamilies()
+    if (!filteredFamilies || filteredFamilies.length === 0) {
+      return {
+        series: [],
+        options: {
+          chart: { type: "pie" as const, height: 350 },
+          labels: [],
+          noData: { text: "No data available" },
+        },
+      }
+    }
+
     const healthCounts = filteredFamilies.reduce(
       (acc, family) => {
-        acc[family.kondisi_kesehatan] = (acc[family.kondisi_kesehatan] || 0) + 1
+        const health = family.kondisi_kesehatan || "Unknown"
+        acc[health] = (acc[health] || 0) + 1
         return acc
       },
       {} as Record<string, number>,
     )
 
+    const labels = Object.keys(healthCounts)
+    const series = Object.values(healthCounts)
+
     return {
-      series: Object.values(healthCounts),
+      series,
       options: {
         chart: {
           type: "pie" as const,
           height: 350,
         },
-        labels: Object.keys(healthCounts),
+        labels,
         colors: ["#10B981", "#EF4444", "#F59E0B"],
         title: {
           text: "Family Health Status Distribution",
@@ -464,7 +568,18 @@ export default function FamilyAnalytics() {
 
   // Family vs Sick Correlation
   const getFamilyVsSickCorrelation = () => {
-    const correlationData = accounts
+    const accountsToUse = propFilteredAccounts || accounts
+    if (!accountsToUse || accountsToUse.length === 0) {
+      return {
+        series: [{ name: "Employees", data: [] }],
+        options: {
+          chart: { type: "scatter" as const, height: 350 },
+          noData: { text: "No data available" },
+        },
+      }
+    }
+
+    const correlationData = accountsToUse
       .map((account) => {
         const totalFamily = families.filter((family) => family.account_id === account.id).length
         const sickFamily = families.filter(
@@ -474,7 +589,7 @@ export default function FamilyAnalytics() {
         return {
           x: totalFamily,
           y: sickFamily,
-          name: account.account_name,
+          name: account.account_name || "Unknown",
         }
       })
       .filter((item) => item.x > 0)
@@ -493,8 +608,12 @@ export default function FamilyAnalytics() {
           toolbar: { show: false },
           events: {
             dataPointSelection: (event: any, chartContext: any, config: any) => {
-              const employeeName = correlationData[config.dataPointIndex].name
-              setSelectedEmployee(selectedEmployee === employeeName ? null : employeeName)
+              if (config && config.dataPointIndex >= 0 && correlationData[config.dataPointIndex]) {
+                const employeeName = correlationData[config.dataPointIndex].name
+                const newEmployee = selectedEmployee === employeeName ? null : employeeName
+                setSelectedEmployee(newEmployee)
+                onFilterChange?.({ employee: newEmployee, location: selectedLocation, relation: selectedRelation })
+              }
             },
           },
         },
@@ -538,12 +657,15 @@ export default function FamilyAnalytics() {
         },
         tooltip: {
           custom: ({ series, seriesIndex, dataPointIndex, w }) => {
-            const data = correlationData[dataPointIndex]
-            return `<div class="p-3 bg-white border rounded-lg shadow-lg">
-              <strong class="text-gray-800 text-sm">${data.name}</strong><br/>
-              <span class="text-blue-600 text-xs">Total Family: ${data.x}</span><br/>
-              <span class="text-red-600 text-xs">Sick Family: ${data.y}</span>
-            </div>`
+            if (dataPointIndex >= 0 && correlationData[dataPointIndex]) {
+              const data = correlationData[dataPointIndex]
+              return `<div class="p-3 bg-white border rounded-lg shadow-lg">
+                <strong class="text-gray-800 text-sm">${data.name}</strong><br/>
+                <span class="text-blue-600 text-xs">Total Family: ${data.x}</span><br/>
+                <span class="text-red-600 text-xs">Sick Family: ${data.y}</span>
+              </div>`
+            }
+            return ""
           },
         },
         grid: {
@@ -564,23 +686,38 @@ export default function FamilyAnalytics() {
 
   // Employees with Sick Family Members Chart
   const getEmployeesWithSickFamily = () => {
-    const employeesWithSick = accounts
+    const accountsToUse = propFilteredAccounts || accounts
+    if (!accountsToUse || accountsToUse.length === 0) {
+      return {
+        series: [{ name: "Sick Family Members", data: [] }],
+        options: {
+          chart: { type: "bar" as const, height: 350 },
+          xaxis: { categories: [] },
+          noData: { text: "No data available" },
+        },
+      }
+    }
+
+    const employeesWithSick = accountsToUse
       .map((account) => {
         const sickFamilyCount = families.filter(
           (family) => family.account_id === account.id && family.kondisi_kesehatan === "Sakit",
         ).length
         return {
-          name: account.account_name,
+          name: account.account_name || "Unknown",
           count: sickFamilyCount,
         }
       })
       .filter((item) => item.count > 0)
 
+    const categories = employeesWithSick.map((item) => item.name)
+    const data = employeesWithSick.map((item) => item.count)
+
     return {
       series: [
         {
           name: "Sick Family Members",
-          data: employeesWithSick.map((item) => item.count),
+          data,
         },
       ],
       options: {
@@ -590,8 +727,12 @@ export default function FamilyAnalytics() {
           toolbar: { show: false },
           events: {
             dataPointSelection: (event: any, chartContext: any, config: any) => {
-              const employeeName = employeesWithSick[config.dataPointIndex].name
-              setSelectedEmployee(selectedEmployee === employeeName ? null : employeeName)
+              if (config && config.dataPointIndex >= 0 && categories[config.dataPointIndex]) {
+                const employeeName = categories[config.dataPointIndex]
+                const newEmployee = selectedEmployee === employeeName ? null : employeeName
+                setSelectedEmployee(newEmployee)
+                onFilterChange?.({ employee: newEmployee, location: selectedLocation, relation: selectedRelation })
+              }
             },
           },
         },
@@ -611,7 +752,7 @@ export default function FamilyAnalytics() {
           },
         },
         xaxis: {
-          categories: employeesWithSick.map((item) => item.name),
+          categories,
           labels: {
             rotate: -45,
             style: {
@@ -654,13 +795,25 @@ export default function FamilyAnalytics() {
 
   // Top Employees with Most Sick Family Members Chart
   const getTopEmployeesWithSickFamily = () => {
-    const employeesWithSick = accounts
+    const accountsToUse = propFilteredAccounts || accounts
+    if (!accountsToUse || accountsToUse.length === 0) {
+      return {
+        series: [{ name: "Sick Family Members", data: [] }],
+        options: {
+          chart: { type: "bar" as const, height: 350 },
+          xaxis: { categories: [] },
+          noData: { text: "No data available" },
+        },
+      }
+    }
+
+    const employeesWithSick = accountsToUse
       .map((account) => {
         const sickFamilyCount = families.filter(
           (family) => family.account_id === account.id && family.kondisi_kesehatan === "Sakit",
         ).length
         return {
-          name: account.account_name,
+          name: account.account_name || "Unknown",
           count: sickFamilyCount,
         }
       })
@@ -668,11 +821,14 @@ export default function FamilyAnalytics() {
       .sort((a, b) => b.count - a.count)
       .slice(0, 5)
 
+    const categories = employeesWithSick.map((item) => item.name)
+    const data = employeesWithSick.map((item) => item.count)
+
     return {
       series: [
         {
           name: "Sick Family Members",
-          data: employeesWithSick.map((item) => item.count),
+          data,
         },
       ],
       options: {
@@ -682,8 +838,12 @@ export default function FamilyAnalytics() {
           toolbar: { show: false },
           events: {
             dataPointSelection: (event: any, chartContext: any, config: any) => {
-              const employeeName = employeesWithSick[config.dataPointIndex].name
-              setSelectedEmployee(selectedEmployee === employeeName ? null : employeeName)
+              if (config && config.dataPointIndex >= 0 && categories[config.dataPointIndex]) {
+                const employeeName = categories[config.dataPointIndex]
+                const newEmployee = selectedEmployee === employeeName ? null : employeeName
+                setSelectedEmployee(newEmployee)
+                onFilterChange?.({ employee: newEmployee, location: selectedLocation, relation: selectedRelation })
+              }
             },
           },
         },
@@ -703,7 +863,7 @@ export default function FamilyAnalytics() {
           },
         },
         xaxis: {
-          categories: employeesWithSick.map((item) => item.name),
+          categories,
           labels: {
             style: {
               fontSize: "11px",
@@ -746,16 +906,26 @@ export default function FamilyAnalytics() {
   // Summary Statistics
   const getSummaryStats = () => {
     const filteredFamilies = getFilteredFamilies()
+    if (!filteredFamilies || filteredFamilies.length === 0) {
+      return {
+        totalFamilies: 0,
+        sickFamilies: 0,
+        uniqueLocations: 0,
+        avgAge: 0,
+        healthyFamilies: 0,
+      }
+    }
+
     const totalFamilies = filteredFamilies.length
     const sickFamilies = filteredFamilies.filter((f) => f.kondisi_kesehatan === "Sakit").length
-    const uniqueLocations = new Set(filteredFamilies.map((f) => f.domisili_sekarang)).size
+    const uniqueLocations = new Set(filteredFamilies.map((f) => f.domisili_sekarang).filter(Boolean)).size
+
+    const validAges = filteredFamilies
+      .filter((f) => f.family_tanggal_lahir)
+      .map((f) => calculateAge(f.family_tanggal_lahir))
+
     const avgAge =
-      filteredFamilies.length > 0
-        ? Math.round(
-            filteredFamilies.reduce((sum, f) => sum + calculateAge(f.family_tanggal_lahir), 0) /
-              filteredFamilies.length,
-          )
-        : 0
+      validAges.length > 0 ? Math.round(validAges.reduce((sum, age) => sum + age, 0) / validAges.length) : 0
 
     return {
       totalFamilies,
@@ -772,6 +942,7 @@ export default function FamilyAnalytics() {
     setSelectedEmployee(null)
     setSelectedLocation(null)
     setSelectedRelation(null)
+    onFilterChange?.({ employee: null, location: null, relation: null })
   }
 
   return (
@@ -830,7 +1001,7 @@ export default function FamilyAnalytics() {
                 <p className="text-sm font-medium text-blue-700">Total Families</p>
                 <p className="text-2xl font-bold text-blue-600">{stats.totalFamilies}</p>
                 <p className="text-xs text-blue-600 mt-1">
-                  {((stats.totalFamilies / families.length) * 100).toFixed(1)}% of all
+                  {families.length > 0 ? ((stats.totalFamilies / families.length) * 100).toFixed(1) : 0}% of all
                 </p>
               </div>
               <Users className="w-8 h-8 text-blue-600" />

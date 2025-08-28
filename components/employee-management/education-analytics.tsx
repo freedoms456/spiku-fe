@@ -8,15 +8,29 @@ import { GraduationCap, BookOpen, Award, TrendingUp, Users, Star, Target, BarCha
 import { accounts, educations } from "@/lib/employee-management-data"
 import dynamic from "next/dynamic"
 
+interface EducationAnalyticsProps {
+  filteredEducations?: any[]
+  filteredAccounts?: any[]
+  onFilterChange?: (filters: any) => void
+}
+
 const Chart = dynamic(() => import("react-apexcharts"), { ssr: false })
 
-export default function EducationAnalytics() {
+export default function EducationAnalytics({
+  filteredEducations: propFilteredEducations,
+  filteredAccounts: propFilteredAccounts,
+  onFilterChange,
+}: EducationAnalyticsProps = {}) {
   const [selectedLevel, setSelectedLevel] = useState<string | null>(null)
   const [selectedMajor, setSelectedMajor] = useState<string | null>(null)
   const [selectedInstitution, setSelectedInstitution] = useState<string | null>(null)
 
   // Get filtered educations based on selections
   const getFilteredEducations = () => {
+    if (propFilteredEducations) {
+      return propFilteredEducations
+    }
+
     let filtered = educations
 
     if (selectedLevel) {
@@ -37,28 +51,47 @@ export default function EducationAnalytics() {
   // Education Level Distribution Chart
   const getEducationLevelDistribution = () => {
     const filteredEducations = getFilteredEducations()
+    if (!filteredEducations || filteredEducations.length === 0) {
+      return {
+        series: [],
+        options: {
+          chart: { type: "donut" as const, height: 350 },
+          labels: [],
+          noData: { text: "No data available" },
+        },
+      }
+    }
+
     const levelCounts = filteredEducations.reduce(
       (acc, education) => {
-        acc[education.education_tingkat] = (acc[education.education_tingkat] || 0) + 1
+        const level = education.education_tingkat || "Unknown"
+        acc[level] = (acc[level] || 0) + 1
         return acc
       },
       {} as Record<string, number>,
     )
 
+    const labels = Object.keys(levelCounts)
+    const series = Object.values(levelCounts)
+
     return {
-      series: Object.values(levelCounts),
+      series,
       options: {
         chart: {
           type: "donut" as const,
           height: 350,
           events: {
             dataPointSelection: (event: any, chartContext: any, config: any) => {
-              const level = Object.keys(levelCounts)[config.dataPointIndex]
-              setSelectedLevel(selectedLevel === level ? null : level)
+              if (config && config.dataPointIndex >= 0 && labels[config.dataPointIndex]) {
+                const level = labels[config.dataPointIndex]
+                const newLevel = selectedLevel === level ? null : level
+                setSelectedLevel(newLevel)
+                onFilterChange?.({ level: newLevel, major: selectedMajor, institution: selectedInstitution })
+              }
             },
           },
         },
-        labels: Object.keys(levelCounts),
+        labels,
         colors: ["#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6"],
         title: {
           text: "Education Level Distribution",
@@ -110,9 +143,21 @@ export default function EducationAnalytics() {
   // Most Common Majors Chart
   const getMostCommonMajors = () => {
     const filteredEducations = getFilteredEducations()
+    if (!filteredEducations || filteredEducations.length === 0) {
+      return {
+        series: [{ name: "Employees", data: [] }],
+        options: {
+          chart: { type: "bar" as const, height: 350 },
+          xaxis: { categories: [] },
+          noData: { text: "No data available" },
+        },
+      }
+    }
+
     const majorCounts = filteredEducations.reduce(
       (acc, education) => {
-        acc[education.education_jurusan] = (acc[education.education_jurusan] || 0) + 1
+        const major = education.education_jurusan || "Unknown"
+        acc[major] = (acc[major] || 0) + 1
         return acc
       },
       {} as Record<string, number>,
@@ -122,11 +167,14 @@ export default function EducationAnalytics() {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 8)
 
+    const categories = sortedMajors.map(([major, _]) => major)
+    const data = sortedMajors.map(([_, count]) => count)
+
     return {
       series: [
         {
           name: "Employees",
-          data: sortedMajors.map(([_, count]) => count),
+          data,
         },
       ],
       options: {
@@ -136,8 +184,12 @@ export default function EducationAnalytics() {
           toolbar: { show: false },
           events: {
             dataPointSelection: (event: any, chartContext: any, config: any) => {
-              const major = sortedMajors[config.dataPointIndex][0]
-              setSelectedMajor(selectedMajor === major ? null : major)
+              if (config && config.dataPointIndex >= 0 && categories[config.dataPointIndex]) {
+                const major = categories[config.dataPointIndex]
+                const newMajor = selectedMajor === major ? null : major
+                setSelectedMajor(newMajor)
+                onFilterChange?.({ level: selectedLevel, major: newMajor, institution: selectedInstitution })
+              }
             },
           },
         },
@@ -157,7 +209,7 @@ export default function EducationAnalytics() {
           },
         },
         xaxis: {
-          categories: sortedMajors.map(([major, _]) => major),
+          categories,
           labels: {
             style: {
               fontSize: "11px",
@@ -200,21 +252,35 @@ export default function EducationAnalytics() {
   // Graduation Year Distribution Chart
   const getGraduationYearDistribution = () => {
     const filteredEducations = getFilteredEducations()
+    if (!filteredEducations || filteredEducations.length === 0) {
+      return {
+        series: [{ name: "Graduates", data: [] }],
+        options: {
+          chart: { type: "line" as const, height: 350 },
+          xaxis: { categories: [] },
+          noData: { text: "No data available" },
+        },
+      }
+    }
+
     const yearCounts = filteredEducations.reduce(
       (acc, education) => {
-        acc[education.education_tahun_lulus] = (acc[education.education_tahun_lulus] || 0) + 1
+        const year = education.education_tahun_lulus || "Unknown"
+        acc[year] = (acc[year] || 0) + 1
         return acc
       },
       {} as Record<string, number>,
     )
 
     const sortedYears = Object.entries(yearCounts).sort((a, b) => a[0].localeCompare(b[0]))
+    const categories = sortedYears.map(([year, _]) => year)
+    const data = sortedYears.map(([_, count]) => count)
 
     return {
       series: [
         {
           name: "Graduates",
-          data: sortedYears.map(([_, count]) => count),
+          data,
         },
       ],
       options: {
@@ -234,7 +300,7 @@ export default function EducationAnalytics() {
           },
         },
         xaxis: {
-          categories: sortedYears.map(([year, _]) => year),
+          categories,
           labels: {
             style: {
               fontSize: "11px",
@@ -277,11 +343,22 @@ export default function EducationAnalytics() {
   // GPA Distribution by Education Level Chart
   const getGPADistributionByLevel = () => {
     const filteredEducations = getFilteredEducations()
-    const levels = [...new Set(filteredEducations.map((edu) => edu.education_tingkat))]
+    if (!filteredEducations || filteredEducations.length === 0) {
+      return {
+        series: [],
+        options: {
+          chart: { type: "boxPlot" as const, height: 350 },
+          xaxis: { categories: [] },
+          noData: { text: "No data available" },
+        },
+      }
+    }
+
+    const levels = [...new Set(filteredEducations.map((edu) => edu.education_tingkat).filter(Boolean))]
 
     const series = levels.map((level) => {
       const levelEducations = filteredEducations.filter((edu) => edu.education_tingkat === level)
-      const gpas = levelEducations.map((edu) => Number.parseFloat(edu.education_ipk))
+      const gpas = levelEducations.map((edu) => Number.parseFloat(edu.education_ipk)).filter((gpa) => !isNaN(gpa))
 
       return {
         name: level,
@@ -347,9 +424,21 @@ export default function EducationAnalytics() {
   // Top Institutions Chart
   const getTopInstitutions = () => {
     const filteredEducations = getFilteredEducations()
+    if (!filteredEducations || filteredEducations.length === 0) {
+      return {
+        series: [{ name: "Alumni", data: [] }],
+        options: {
+          chart: { type: "bar" as const, height: 350 },
+          xaxis: { categories: [] },
+          noData: { text: "No data available" },
+        },
+      }
+    }
+
     const institutionCounts = filteredEducations.reduce(
       (acc, education) => {
-        acc[education.education_institusi] = (acc[education.education_institusi] || 0) + 1
+        const institution = education.education_institusi || "Unknown"
+        acc[institution] = (acc[institution] || 0) + 1
         return acc
       },
       {} as Record<string, number>,
@@ -359,11 +448,16 @@ export default function EducationAnalytics() {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 6)
 
+    const categories = sortedInstitutions.map(([institution, _]) =>
+      institution.length > 15 ? institution.substring(0, 15) + "..." : institution,
+    )
+    const data = sortedInstitutions.map(([_, count]) => count)
+
     return {
       series: [
         {
           name: "Alumni",
-          data: sortedInstitutions.map(([_, count]) => count),
+          data,
         },
       ],
       options: {
@@ -373,8 +467,12 @@ export default function EducationAnalytics() {
           toolbar: { show: false },
           events: {
             dataPointSelection: (event: any, chartContext: any, config: any) => {
-              const institution = sortedInstitutions[config.dataPointIndex][0]
-              setSelectedInstitution(selectedInstitution === institution ? null : institution)
+              if (config && config.dataPointIndex >= 0 && sortedInstitutions[config.dataPointIndex]) {
+                const institution = sortedInstitutions[config.dataPointIndex][0]
+                const newInstitution = selectedInstitution === institution ? null : institution
+                setSelectedInstitution(newInstitution)
+                onFilterChange?.({ level: selectedLevel, major: selectedMajor, institution: newInstitution })
+              }
             },
           },
         },
@@ -394,9 +492,7 @@ export default function EducationAnalytics() {
           },
         },
         xaxis: {
-          categories: sortedInstitutions.map(([institution, _]) =>
-            institution.length > 15 ? institution.substring(0, 15) + "..." : institution,
-          ),
+          categories,
           labels: {
             rotate: -45,
             style: {
@@ -439,8 +535,20 @@ export default function EducationAnalytics() {
 
   // Multiple Degrees Chart
   const getMultipleDegreesChart = () => {
-    const employeeEducationCount = accounts.map((account) => ({
-      name: account.account_name,
+    const accountsToUse = propFilteredAccounts || accounts
+    if (!accountsToUse || accountsToUse.length === 0) {
+      return {
+        series: [],
+        options: {
+          chart: { type: "pie" as const, height: 350 },
+          labels: [],
+          noData: { text: "No data available" },
+        },
+      }
+    }
+
+    const employeeEducationCount = accountsToUse.map((account) => ({
+      name: account.account_name || "Unknown",
       count: educations.filter((edu) => edu.account_id === account.id).length,
     }))
 
@@ -490,12 +598,28 @@ export default function EducationAnalytics() {
 
   // Average GPA by Institution Chart
   const getAverageGPAByInstitution = () => {
-    const institutionGPAs = educations.reduce(
+    const filteredEducations = getFilteredEducations()
+    if (!filteredEducations || filteredEducations.length === 0) {
+      return {
+        series: [{ name: "Average GPA", data: [] }],
+        options: {
+          chart: { type: "bar" as const, height: 350 },
+          xaxis: { categories: [] },
+          noData: { text: "No data available" },
+        },
+      }
+    }
+
+    const institutionGPAs = filteredEducations.reduce(
       (acc, education) => {
-        if (!acc[education.education_institusi]) {
-          acc[education.education_institusi] = []
+        const institution = education.education_institusi || "Unknown"
+        const gpa = Number.parseFloat(education.education_ipk)
+        if (!isNaN(gpa)) {
+          if (!acc[institution]) {
+            acc[institution] = []
+          }
+          acc[institution].push(gpa)
         }
-        acc[education.education_institusi].push(Number.parseFloat(education.education_ipk))
         return acc
       },
       {} as Record<string, number[]>,
@@ -510,11 +634,16 @@ export default function EducationAnalytics() {
       .sort((a, b) => b.avgGPA - a.avgGPA)
       .slice(0, 10)
 
+    const categories = institutionAverages.map((item) =>
+      item.institution.length > 20 ? item.institution.substring(0, 20) + "..." : item.institution,
+    )
+    const data = institutionAverages.map((item) => Number.parseFloat(item.avgGPA.toFixed(2)))
+
     return {
       series: [
         {
           name: "Average GPA",
-          data: institutionAverages.map((item) => Number.parseFloat(item.avgGPA.toFixed(2))),
+          data,
         },
       ],
       options: {
@@ -540,10 +669,9 @@ export default function EducationAnalytics() {
           },
         },
         xaxis: {
-          categories: institutionAverages.map((item) =>
-            item.institution.length > 20 ? item.institution.substring(0, 20) + "..." : item.institution,
-          ),
+          categories,
           labels: {
+            rotate: -45,
             style: {
               fontSize: "10px",
               fontWeight: "500",
@@ -584,12 +712,26 @@ export default function EducationAnalytics() {
 
   // Education Level vs GPA Relationship Chart
   const getEducationLevelVsGPA = () => {
-    const levelGPAData = educations.map((education) => ({
-      x: education.education_tingkat,
-      y: Number.parseFloat(education.education_ipk),
-      name: accounts.find((acc) => acc.id === education.account_id)?.account_name || "Unknown",
-      major: education.education_jurusan,
-    }))
+    const filteredEducations = getFilteredEducations()
+    if (!filteredEducations || filteredEducations.length === 0) {
+      return {
+        series: [],
+        options: {
+          chart: { type: "scatter" as const, height: 350 },
+          noData: { text: "No data available" },
+        },
+      }
+    }
+
+    const levelGPAData = filteredEducations
+      .filter((education) => education.education_tingkat && education.education_ipk)
+      .map((education) => ({
+        x: education.education_tingkat,
+        y: Number.parseFloat(education.education_ipk),
+        name: accounts.find((acc) => acc.id === education.account_id)?.account_name || "Unknown",
+        major: education.education_jurusan || "Unknown",
+      }))
+      .filter((item) => !isNaN(item.y))
 
     // Group by education level for better visualization
     const levels = ["D3", "S1", "S2", "S3"]
@@ -648,18 +790,19 @@ export default function EducationAnalytics() {
         },
         tooltip: {
           custom: ({ series, seriesIndex, dataPointIndex, w }) => {
-            const data = series[seriesIndex]
-              ? levelGPAData.find(
-                  (item) => item.x === levels[seriesIndex] && item.y === series[seriesIndex][dataPointIndex],
-                )
-              : null
-            if (!data) return ""
-            return `<div class="p-3 bg-white border rounded-lg shadow-lg">
-              <strong class="text-gray-800 text-sm">${data.name}</strong><br/>
-              <span class="text-blue-600 text-xs">Level: ${data.x}</span><br/>
-              <span class="text-green-600 text-xs">GPA: ${data.y}</span><br/>
-              <span class="text-purple-600 text-xs">Major: ${data.major}</span>
-            </div>`
+            if (seriesIndex >= 0 && dataPointIndex >= 0) {
+              const levelData = levelGPAData.filter((item) => item.x === levels[seriesIndex])
+              const data = levelData[dataPointIndex]
+              if (data) {
+                return `<div class="p-3 bg-white border rounded-lg shadow-lg">
+                  <strong class="text-gray-800 text-sm">${data.name}</strong><br/>
+                  <span class="text-blue-600 text-xs">Level: ${data.x}</span><br/>
+                  <span class="text-green-600 text-xs">GPA: ${data.y}</span><br/>
+                  <span class="text-purple-600 text-xs">Major: ${data.major}</span>
+                </div>`
+              }
+            }
+            return ""
           },
         },
         grid: {
@@ -680,10 +823,27 @@ export default function EducationAnalytics() {
 
   // High GPA Graduates by Major Chart
   const getHighGPAGraduatesByMajor = () => {
-    const highGPAEducations = educations.filter((edu) => Number.parseFloat(edu.education_ipk) > 3.5)
+    const filteredEducations = getFilteredEducations()
+    if (!filteredEducations || filteredEducations.length === 0) {
+      return {
+        series: [{ name: "High GPA Graduates", data: [] }],
+        options: {
+          chart: { type: "bar" as const, height: 350 },
+          xaxis: { categories: [] },
+          noData: { text: "No data available" },
+        },
+      }
+    }
+
+    const highGPAEducations = filteredEducations.filter((edu) => {
+      const gpa = Number.parseFloat(edu.education_ipk)
+      return !isNaN(gpa) && gpa > 3.5
+    })
+
     const majorCounts = highGPAEducations.reduce(
       (acc, education) => {
-        acc[education.education_jurusan] = (acc[education.education_jurusan] || 0) + 1
+        const major = education.education_jurusan || "Unknown"
+        acc[major] = (acc[major] || 0) + 1
         return acc
       },
       {} as Record<string, number>,
@@ -693,11 +853,14 @@ export default function EducationAnalytics() {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 8)
 
+    const categories = sortedMajors.map(([major, _]) => major)
+    const data = sortedMajors.map(([_, count]) => count)
+
     return {
       series: [
         {
           name: "High GPA Graduates",
-          data: sortedMajors.map(([_, count]) => count),
+          data,
         },
       ],
       options: {
@@ -722,7 +885,7 @@ export default function EducationAnalytics() {
           },
         },
         xaxis: {
-          categories: sortedMajors.map(([major, _]) => major),
+          categories,
           labels: {
             rotate: -45,
             style: {
@@ -766,19 +929,35 @@ export default function EducationAnalytics() {
   // Summary Statistics
   const getSummaryStats = () => {
     const filteredEducations = getFilteredEducations()
+    if (!filteredEducations || filteredEducations.length === 0) {
+      return {
+        totalEducations: 0,
+        uniqueInstitutions: 0,
+        avgGPA: "0.00",
+        highGPACount: 0,
+        multipleDegreesCount: 0,
+      }
+    }
+
     const totalEducations = filteredEducations.length
-    const uniqueInstitutions = new Set(filteredEducations.map((edu) => edu.education_institusi)).size
+    const uniqueInstitutions = new Set(filteredEducations.map((edu) => edu.education_institusi).filter(Boolean)).size
+
+    const validGPAs = filteredEducations.map((edu) => Number.parseFloat(edu.education_ipk)).filter((gpa) => !isNaN(gpa))
+
     const avgGPA =
-      filteredEducations.reduce((sum, edu) => sum + Number.parseFloat(edu.education_ipk), 0) / totalEducations
-    const highGPACount = filteredEducations.filter((edu) => Number.parseFloat(edu.education_ipk) > 3.5).length
-    const multipleDegreesCount = accounts.filter(
+      validGPAs.length > 0 ? (validGPAs.reduce((sum, gpa) => sum + gpa, 0) / validGPAs.length).toFixed(2) : "0.00"
+
+    const highGPACount = validGPAs.filter((gpa) => gpa > 3.5).length
+
+    const accountsToUse = propFilteredAccounts || accounts
+    const multipleDegreesCount = accountsToUse.filter(
       (acc) => educations.filter((edu) => edu.account_id === acc.id).length > 1,
     ).length
 
     return {
       totalEducations,
       uniqueInstitutions,
-      avgGPA: avgGPA.toFixed(2),
+      avgGPA,
       highGPACount,
       multipleDegreesCount,
     }
@@ -790,6 +969,7 @@ export default function EducationAnalytics() {
     setSelectedLevel(null)
     setSelectedMajor(null)
     setSelectedInstitution(null)
+    onFilterChange?.({ level: null, major: null, institution: null })
   }
 
   return (
@@ -889,7 +1069,8 @@ export default function EducationAnalytics() {
                 <p className="text-sm font-medium text-orange-700">High GPA &gt;3.5</p>
                 <p className="text-2xl font-bold text-orange-600">{stats.highGPACount}</p>
                 <p className="text-xs text-orange-600 mt-1">
-                  {((stats.highGPACount / stats.totalEducations) * 100).toFixed(1)}% of total
+                  {stats.totalEducations > 0 ? ((stats.highGPACount / stats.totalEducations) * 100).toFixed(1) : 0}% of
+                  total
                 </p>
               </div>
               <Target className="w-8 h-8 text-orange-600" />
@@ -977,7 +1158,7 @@ export default function EducationAnalytics() {
 
       {/* Second Row - 3 Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* GPA Distribution by Level */}
+        {/* GPA Distribution by Level 
         <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-indigo-50 border-indigo-200">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
@@ -997,6 +1178,7 @@ export default function EducationAnalytics() {
             />
           </CardContent>
         </Card>
+        */}
 
         {/* Top Institutions */}
         <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-orange-50 border-orange-200">
@@ -1124,7 +1306,8 @@ export default function EducationAnalytics() {
                 <h4 className="font-semibold text-gray-900">Academic Excellence</h4>
               </div>
               <p className="text-sm text-gray-700">
-                {((stats.highGPACount / stats.totalEducations) * 100).toFixed(1)}% of employees have high GPA &gt;3.5
+                {stats.totalEducations > 0 ? ((stats.highGPACount / stats.totalEducations) * 100).toFixed(1) : 0}% of
+                employees have high GPA &gt;3.5
               </p>
               <p className="text-xs text-gray-500 mt-1">Strong academic foundation in the workforce</p>
             </div>

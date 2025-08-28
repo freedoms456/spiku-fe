@@ -9,14 +9,14 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  async redirects() {
+   async redirects() {
     return [
       {
         source: '/',
         destination: '/employee-management',
-        permanent: true, // Use false if this is temporary
+        permanent: true, // 308 redirect
       },
-    ];
+    ]
   },
 }
 
