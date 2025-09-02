@@ -16,8 +16,9 @@ export function useAuth({ redirectTo = "/login" } = {}) {
 
   const logout = () => {
     localStorage.removeItem("user");
+    localStorage.removeItem("account");
     setUser(null);
-    router.push(redirectTo);
+    router.push("/login"); // langsung redirect ke login
   };
 
   // cek user di localStorage untuk auto-redirect

@@ -36,6 +36,7 @@ type ApiAccount = {
   account_pangkat?: string | null
   account_nik?: string | null
   account_golongan?: string | null
+  account_catatan_khusus?: any[]
   account_jabatan?: { id: number; name: string; awal_menjabat?: string | null; akhir_menjabat?: string | null }[]
 }
 
@@ -49,6 +50,7 @@ type Employee = {
   jabatan: string
   golongan: "IV" | "III" | "II" | "I" | ""
   pangkat: string
+  is_catatan: number
 }
 
 export default function TableMasterPage() {
@@ -84,21 +86,25 @@ export default function TableMasterPage() {
       setLoading(true)
       setError(null)
       try {
-        const res = await api.get<ApiAccount[]>("/api/accounts")
-        const data = Array.isArray(res.data) ? res.data : []
+      // ambil dari localStorage
+      const stored = localStorage.getItem("accounts");
+      const res: any[] = stored ? JSON.parse(stored) : [];
 
-        const normalized: Employee[] = data.map((a) => ({
-          id: a.id,
-          name: a.account_name ?? "",
-          nip_bpk: a.account_nip_bpk ?? "",
-          nip_bkn: a.account_nip_bkn ?? "",
-          jenis_kelamin: mapGender(a.account_jenis_kelamin),
-          unit: a.account_unit ?? "",
-          jabatan: pickJabatan(a.account_jabatan),
-          golongan: extractRomanGol(a.account_golongan),
-          pangkat: a.account_pangkat ?? a.account_nik ?? "",
+      // pastikan array valid
+      const data = Array.isArray(res) ? res : [];
+
+      const normalized: Employee[] = data.map((a) => ({
+        id: a.id,
+        name: a.account_name ?? "",
+        nip_bpk: a.account_nip_bpk ?? "",
+        nip_bkn: a.account_nip_bkn ?? "",
+        jenis_kelamin: mapGender(a.account_jenis_kelamin),
+        unit: a.account_unit ?? "",
+        jabatan: pickJabatan(a.account_jabatan),
+        golongan: extractRomanGol(a.account_golongan),
+        pangkat: a.account_pangkat ?? a.account_nik ?? "",
+        is_catatan: Array.isArray(a.account_catatan_khusus) && a.account_catatan_khusus.length > 0 ? 1 : 0,
         }))
-
         setRawData(normalized)
         setCurrentPage(1)
       } catch (e: any) {
@@ -418,7 +424,12 @@ export default function TableMasterPage() {
                   {currentData.map((employee, index) => (
                     <TableRow key={employee.id} className="hover:bg-blue-50/50 transition-colors">
                       <TableCell className="font-medium text-blue-600">{startIndex + index + 1}</TableCell>
-                      <TableCell className="font-medium text-gray-800">{employee.name}</TableCell>
+                      <TableCell className="font-medium text-gray-800 flex items-center gap-2">
+                      {employee.name}
+                      {employee.is_catatan === 1 && (
+                        <Badge variant="destructive">Catatan</Badge>
+                      )}
+                    </TableCell>
                       <TableCell className="font-mono text-sm text-gray-600">{employee.nip_bkn}</TableCell>
                       <TableCell>
                         <Badge variant={getGenderBadgeVariant(employee.jenis_kelamin)} className="font-medium">

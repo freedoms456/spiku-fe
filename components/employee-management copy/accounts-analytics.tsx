@@ -2,7 +2,6 @@
 
 import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import ActiveFilters from "./ActiveFilters"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Users, TrendingUp, Award, Calendar, BarChart3, Activity, Target } from "lucide-react"
@@ -42,13 +41,42 @@ export default function AccountsAnalytics({
   
     return age;
   };
-  
-  let filtered = accounts
+
   // Get filtered accounts based on selections
   const getFilteredAccounts = () => {
     // console.log(selectedAge)
     if (propFilteredAccounts) {
       return propFilteredAccounts
+    }
+
+    let filtered = accounts
+
+    if (selectedGender) {
+      // console.log(selectedGender)
+      filtered = filtered.filter((acc) => acc.account_jenis_kelamin === selectedGender)
+    }
+
+    if (selectedGrade) {
+      filtered = filtered.filter((acc) => acc.account_golongan === selectedGrade)
+    }
+
+    if (selectedUnit) {
+      filtered = filtered.filter((acc) => acc.account_unit === selectedUnit)
+    }
+
+    if (selectedAge) {
+      filtered = filtered.filter((acc) => {
+        const age = calculateAge(acc.account_tanggal_lahir)
+        const ageRange = selectedAge
+        
+        if (ageRange === "20-30") return age >= 20 && age <= 30
+        if (ageRange === "31-40") return age >= 31 && age <= 40
+        if (ageRange === "41-50") return age >= 41 && age <= 50
+        if (ageRange === "51-60") return age >= 51 && age <= 60
+        if (ageRange === "60+") return age > 60
+        
+        return false
+      })
     }
 
     return filtered
@@ -644,7 +672,59 @@ export default function AccountsAnalytics({
 
   return (
     <div className="space-y-6">
-    
+      {/* Filter Status */}
+      {(selectedGender || selectedGrade || selectedUnit || selectedAge) && (
+        <Card className="border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-semibold text-blue-800">Active Filters:</span>
+                {selectedGender && (
+                  <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-200 transition-colors">
+                    <Users className="w-3 h-3 mr-1" />
+                    {selectedGender}
+                  </Badge>
+                )}
+                {selectedGrade && (
+                  <Badge
+                    variant="secondary"
+                    className="bg-purple-100 text-purple-800 hover:bg-purple-200 transition-colors"
+                  >
+                    <Award className="w-3 h-3 mr-1" />
+                    Grade {selectedGrade}
+                  </Badge>
+                )}
+                {selectedUnit && (
+                  <Badge
+                    variant="secondary"
+                    className="bg-orange-100 text-orange-800 hover:bg-orange-200 transition-colors"
+                  >
+                    <Target className="w-3 h-3 mr-1" />
+                    {selectedUnit.length > 20 ? selectedUnit.substring(0, 20) + "..." : selectedUnit}
+                  </Badge>
+                )}
+                {selectedAge && (
+                  <Badge
+                    variant="secondary"
+                    className="bg-green-100 text-green-800 hover:bg-green-200 transition-colors"
+                  >
+                    <Calendar className="w-3 h-3 mr-1" />
+                    {selectedAge} years
+                  </Badge>
+                )}
+              </div>
+              <Button
+                onClick={clearFilters}
+                variant="outline"
+                size="sm"
+                className="hover:bg-blue-100 transition-colors bg-transparent"
+              >
+                Clear All Filters
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">

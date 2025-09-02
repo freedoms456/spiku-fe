@@ -1,11 +1,11 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Users, Heart, MapPin, BarChart3, TrendingUp, Activity, Baby, User, AlertTriangle } from "lucide-react"
-import { accounts, families } from "@/lib/employee-management-data"
+import { accounts, familiess } from "@/lib/employee-management-data"
 import dynamic from "next/dynamic"
 
 const Chart = dynamic(() => import("react-apexcharts"), { ssr: false })
@@ -13,62 +13,56 @@ const Chart = dynamic(() => import("react-apexcharts"), { ssr: false })
 interface FamilyAnalyticsProps {
   filteredFamilies?: any[]
   filteredAccounts?: any[]
+  familiesAcc?: any[]
   onFilterChange?: (filters: any) => void
 }
 
 export default function FamilyAnalytics({
   filteredFamilies: propFilteredFamilies,
   filteredAccounts: propFilteredAccounts,
+  familiesAcc: families,
   onFilterChange,
 }: FamilyAnalyticsProps = {}) {
   const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null)
   const [selectedLocation, setSelectedLocation] = useState<string | null>(null)
   const [selectedRelation, setSelectedRelation] = useState<string | null>(null)
+  // const families = {}
 
   // Calculate age from birth date
   const calculateAge = (birthDate: string) => {
-    if (!birthDate) return 0
-    const today = new Date()
-    const birth = new Date(birthDate)
-    let age = today.getFullYear() - birth.getFullYear()
-    const monthDiff = today.getMonth() - birth.getMonth()
+    const today = new Date();
+  
+    // birthDate format: "DD/MM/YYYY"
+    const [day, month, year] = birthDate.split("-").map(Number);
+    const birth = new Date(year, month - 1, day); // bulan dikurangi 1 karena index dimulai 0
+  
+    let age = today.getFullYear() - birth.getFullYear();
+    const monthDiff = today.getMonth() - birth.getMonth();
+  
     if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-      age--
+      age--;
     }
-    return age
-  }
+  
+    return age;
+  };
 
+  
   // Get filtered families based on selections
-  const getFilteredFamilies = () => {
-    if (propFilteredFamilies) {
-      return propFilteredFamilies
-    }
+  // Family Analytics
+    const getFilteredAccounts = useMemo(() => {
+    
+      let filtered = propFilteredAccounts
+      
 
-    let filtered = families
+      return filtered
+    }, [families, propFilteredAccounts, selectedEmployee, selectedLocation, selectedRelation, accounts])
 
-    if (selectedEmployee) {
-      const account =
-        propFilteredAccounts?.find((acc) => acc.account_name === selectedEmployee) ||
-        accounts.find((acc) => acc.account_name === selectedEmployee)
-      if (account) {
-        filtered = filtered.filter((f) => f.account_id === account.id)
-      }
-    }
 
-    if (selectedLocation) {
-      filtered = filtered.filter((f) => f.domisili_sekarang === selectedLocation)
-    }
-
-    if (selectedRelation) {
-      filtered = filtered.filter((f) => f.family_hubungan === selectedRelation)
-    }
-
-    return filtered
-  }
+  
 
   // Family Members per Employee Chart
   const getFamilyMembersPerEmployee = () => {
-    const accountsToUse = propFilteredAccounts || accounts
+    const accountsToUse = propFilteredAccounts
     if (!accountsToUse || accountsToUse.length === 0) {
       return {
         series: [],
@@ -80,16 +74,13 @@ export default function FamilyAnalytics({
       }
     }
 
-    const employeeFamilyCount = accountsToUse.map((account) => ({
+    const employeeFamilyCount = propFilteredAccounts.map((account) => ({
       name: account.account_name || "Unknown",
-      count: families.filter((family) => family.account_id === account.id).length,
-      sickCount: families.filter((family) => family.account_id === account.id && family.kondisi_kesehatan === "Sakit")
-        .length,
+      count: account.keluarga?.length ?? 0
     }))
 
     const categories = employeeFamilyCount.map((item) => item.name)
     const totalData = employeeFamilyCount.map((item) => item.count)
-    const sickData = employeeFamilyCount.map((item) => item.sickCount)
 
     return {
       series: [
@@ -97,10 +88,7 @@ export default function FamilyAnalytics({
           name: "Total Family Members",
           data: totalData,
         },
-        {
-          name: "Sick Family Members",
-          data: sickData,
-        },
+      
       ],
       options: {
         chart: {
@@ -180,7 +168,7 @@ export default function FamilyAnalytics({
 
   // Relationship Distribution Chart
   const getRelationshipDistribution = () => {
-    const filteredFamilies = getFilteredFamilies()
+    const filteredFamilies = getFilteredAccounts
     if (!filteredFamilies || filteredFamilies.length === 0) {
       return {
         series: [],
@@ -191,19 +179,24 @@ export default function FamilyAnalytics({
         },
       }
     }
-
-    const relationshipCounts = filteredFamilies.reduce(
-      (acc, family) => {
-        const relation = family.family_hubungan || "Unknown"
-        acc[relation] = (acc[relation] || 0) + 1
-        return acc
-      },
-      {} as Record<string, number>,
-    )
-
+  
+    // Hitung jumlah hubungan dari semua keluarga
+    const relationshipCounts = filteredFamilies.reduce((acc, account) => {
+      if (Array.isArray(account.keluarga)) {
+        account.keluarga.forEach((fam) => {
+          const relation = fam.hubungan || "Unknown"
+          acc[relation] = (acc[relation] || 0) + 1
+        })
+      }
+      return acc
+    }, {} as Record<string, number>)
+  
     const labels = Object.keys(relationshipCounts)
     const series = Object.values(relationshipCounts)
-
+  
+    // total anggota keluarga
+    const totalMembers = series.reduce((sum, v) => sum + (Number(v) || 0), 0)
+  
     return {
       series,
       options: {
@@ -211,12 +204,16 @@ export default function FamilyAnalytics({
           type: "donut" as const,
           height: 350,
           events: {
-            dataPointSelection: (event: any, chartContext: any, config: any) => {
+            dataPointSelection: (_event: any, _chartContext: any, config: any) => {
               if (config && config.dataPointIndex >= 0 && labels[config.dataPointIndex]) {
                 const relation = labels[config.dataPointIndex]
                 const newRelation = selectedRelation === relation ? null : relation
                 setSelectedRelation(newRelation)
-                onFilterChange?.({ employee: selectedEmployee, location: selectedLocation, relation: newRelation })
+                onFilterChange?.({
+                  employee: selectedEmployee,
+                  location: selectedLocation,
+                  relation: newRelation,
+                })
               }
             },
           },
@@ -249,7 +246,7 @@ export default function FamilyAnalytics({
                   fontSize: "14px",
                   fontWeight: "600",
                   color: "#374151",
-                  formatter: () => filteredFamilies.length.toString(),
+                  formatter: () => totalMembers.toString(),
                 },
                 value: {
                   fontSize: "20px",
@@ -270,12 +267,8 @@ export default function FamilyAnalytics({
           {
             breakpoint: 480,
             options: {
-              chart: {
-                width: 300,
-              },
-              legend: {
-                position: "bottom",
-              },
+              chart: { width: 300 },
+              legend: { position: "bottom" },
             },
           },
         ],
@@ -285,7 +278,7 @@ export default function FamilyAnalytics({
 
   // Location Distribution Chart
   const getLocationDistribution = () => {
-    const filteredFamilies = getFilteredFamilies()
+    const filteredFamilies = families
     if (!filteredFamilies || filteredFamilies.length === 0) {
       return {
         series: [{ name: "Family Members", data: [] }],
@@ -389,523 +382,116 @@ export default function FamilyAnalytics({
   }
 
   // Age Distribution Chart
-  const getFamilyAgeDistribution = () => {
-    const filteredFamilies = getFilteredFamilies()
-    if (!filteredFamilies || filteredFamilies.length === 0) {
-      return {
-        series: [{ name: "Family Members", data: [] }],
-        options: {
-          chart: { type: "column" as const, height: 350 },
-          xaxis: { categories: [] },
-          noData: { text: "No data available" },
-        },
-      }
-    }
+  // const getFamilyAgeDistribution = () => {
+  //   const filteredFamilies = getFilteredAccounts
+  //   if (!filteredFamilies || filteredFamilies.length === 0) {
+  //     return {
+  //       series: [{ name: "Family Members", data: [] }],
+  //       options: {
+  //         chart: { type: "column" as const, height: 350 },
+  //         xaxis: { categories: [] },
+  //         noData: { text: "No data available" },
+  //       },
+  //     }
+  //   }
 
-    const ages = filteredFamilies
-      .filter((family) => family.family_tanggal_lahir)
-      .map((family) => calculateAge(family.family_tanggal_lahir))
+  //   const ages = filteredFamilies
+  //     .filter((family) => family.family_tanggal_lahir)
+  //     .map((family) => calculateAge(family.family_tanggal_lahir))
 
-    const ageRanges = {
-      "0-10": 0,
-      "11-20": 0,
-      "21-30": 0,
-      "31-40": 0,
-      "41-50": 0,
-      "51+": 0,
-    }
+  //   const ageRanges = {
+  //     "0-10": 0,
+  //     "11-20": 0,
+  //     "21-30": 0,
+  //     "31-40": 0,
+  //     "41-50": 0,
+  //     "51+": 0,
+  //   }
 
-    ages.forEach((age) => {
-      if (age <= 10) ageRanges["0-10"]++
-      else if (age <= 20) ageRanges["11-20"]++
-      else if (age <= 30) ageRanges["21-30"]++
-      else if (age <= 40) ageRanges["31-40"]++
-      else if (age <= 50) ageRanges["41-50"]++
-      else ageRanges["51+"]++
-    })
+  //   ages.forEach((age) => {
+  //     if (age <= 10) ageRanges["0-10"]++
+  //     else if (age <= 20) ageRanges["11-20"]++
+  //     else if (age <= 30) ageRanges["21-30"]++
+  //     else if (age <= 40) ageRanges["31-40"]++
+  //     else if (age <= 50) ageRanges["41-50"]++
+  //     else ageRanges["51+"]++
+  //   })
 
-    return {
-      series: [
-        {
-          name: "Family Members",
-          data: Object.values(ageRanges),
-        },
-      ],
-      options: {
-        chart: {
-          type: "column" as const,
-          height: 350,
-          toolbar: { show: false },
-        },
-        plotOptions: {
-          bar: {
-            borderRadius: 8,
-            columnWidth: "75%",
-          },
-        },
-        dataLabels: {
-          enabled: true,
-          style: {
-            colors: ["#fff"],
-            fontWeight: "bold",
-            fontSize: "12px",
-          },
-        },
-        xaxis: {
-          categories: Object.keys(ageRanges),
-          labels: {
-            style: {
-              fontSize: "12px",
-              fontWeight: "500",
-            },
-          },
-        },
-        yaxis: {
-          title: {
-            text: "Number of Family Members",
-            style: {
-              fontWeight: "600",
-            },
-          },
-        },
-        colors: ["#8B5CF6"],
-        title: {
-          text: "Family Members Age Distribution",
-          align: "center" as const,
-          style: {
-            fontSize: "16px",
-            fontWeight: "bold",
-            color: "#1F2937",
-          },
-        },
-        tooltip: {
-          y: {
-            formatter: (val: number) => `${val} members`,
-          },
-          theme: "light",
-        },
-        grid: {
-          borderColor: "#E5E7EB",
-          strokeDashArray: 3,
-        },
-      },
-    }
-  }
+  //   return {
+  //     series: [
+  //       {
+  //         name: "Family Members",
+  //         data: Object.values(ageRanges),
+  //       },
+  //     ],
+  //     options: {
+  //       chart: {
+  //         type: "column" as const,
+  //         height: 350,
+  //         toolbar: { show: false },
+  //       },
+  //       plotOptions: {
+  //         bar: {
+  //           borderRadius: 8,
+  //           columnWidth: "75%",
+  //         },
+  //       },
+  //       dataLabels: {
+  //         enabled: true,
+  //         style: {
+  //           colors: ["#fff"],
+  //           fontWeight: "bold",
+  //           fontSize: "12px",
+  //         },
+  //       },
+  //       xaxis: {
+  //         categories: Object.keys(ageRanges),
+  //         labels: {
+  //           style: {
+  //             fontSize: "12px",
+  //             fontWeight: "500",
+  //           },
+  //         },
+  //       },
+  //       yaxis: {
+  //         title: {
+  //           text: "Number of Family Members",
+  //           style: {
+  //             fontWeight: "600",
+  //           },
+  //         },
+  //       },
+  //       colors: ["#8B5CF6"],
+  //       title: {
+  //         text: "Family Members Age Distribution",
+  //         align: "center" as const,
+  //         style: {
+  //           fontSize: "16px",
+  //           fontWeight: "bold",
+  //           color: "#1F2937",
+  //         },
+  //       },
+  //       tooltip: {
+  //         y: {
+  //           formatter: (val: number) => `${val} members`,
+  //         },
+  //         theme: "light",
+  //       },
+  //       grid: {
+  //         borderColor: "#E5E7EB",
+  //         strokeDashArray: 3,
+  //       },
+  //     },
+  //   }
+  // }
 
-  // Health Status Chart
-  const getHealthStatusChart = () => {
-    const filteredFamilies = getFilteredFamilies()
-    if (!filteredFamilies || filteredFamilies.length === 0) {
-      return {
-        series: [],
-        options: {
-          chart: { type: "pie" as const, height: 350 },
-          labels: [],
-          noData: { text: "No data available" },
-        },
-      }
-    }
+ 
 
-    const healthCounts = filteredFamilies.reduce(
-      (acc, family) => {
-        const health = family.kondisi_kesehatan || "Unknown"
-        acc[health] = (acc[health] || 0) + 1
-        return acc
-      },
-      {} as Record<string, number>,
-    )
 
-    const labels = Object.keys(healthCounts)
-    const series = Object.values(healthCounts)
-
-    return {
-      series,
-      options: {
-        chart: {
-          type: "pie" as const,
-          height: 350,
-        },
-        labels,
-        colors: ["#10B981", "#EF4444", "#F59E0B"],
-        title: {
-          text: "Family Health Status Distribution",
-          align: "center" as const,
-          style: {
-            fontSize: "16px",
-            fontWeight: "bold",
-            color: "#1F2937",
-          },
-        },
-        legend: {
-          position: "bottom" as const,
-          fontSize: "12px",
-          fontWeight: "500",
-        },
-        tooltip: {
-          y: {
-            formatter: (val: number) => `${val} members`,
-          },
-          theme: "light",
-        },
-        plotOptions: {
-          pie: {
-            dataLabels: {
-              offset: -5,
-            },
-          },
-        },
-        dataLabels: {
-          enabled: true,
-          style: {
-            fontSize: "12px",
-            fontWeight: "bold",
-            colors: ["#fff"],
-          },
-        },
-      },
-    }
-  }
-
-  // Family vs Sick Correlation
-  const getFamilyVsSickCorrelation = () => {
-    const accountsToUse = propFilteredAccounts || accounts
-    if (!accountsToUse || accountsToUse.length === 0) {
-      return {
-        series: [{ name: "Employees", data: [] }],
-        options: {
-          chart: { type: "scatter" as const, height: 350 },
-          noData: { text: "No data available" },
-        },
-      }
-    }
-
-    const correlationData = accountsToUse
-      .map((account) => {
-        const totalFamily = families.filter((family) => family.account_id === account.id).length
-        const sickFamily = families.filter(
-          (family) => family.account_id === account.id && family.kondisi_kesehatan === "Sakit",
-        ).length
-
-        return {
-          x: totalFamily,
-          y: sickFamily,
-          name: account.account_name || "Unknown",
-        }
-      })
-      .filter((item) => item.x > 0)
-
-    return {
-      series: [
-        {
-          name: "Employees",
-          data: correlationData,
-        },
-      ],
-      options: {
-        chart: {
-          type: "scatter" as const,
-          height: 350,
-          toolbar: { show: false },
-          events: {
-            dataPointSelection: (event: any, chartContext: any, config: any) => {
-              if (config && config.dataPointIndex >= 0 && correlationData[config.dataPointIndex]) {
-                const employeeName = correlationData[config.dataPointIndex].name
-                const newEmployee = selectedEmployee === employeeName ? null : employeeName
-                setSelectedEmployee(newEmployee)
-                onFilterChange?.({ employee: newEmployee, location: selectedLocation, relation: selectedRelation })
-              }
-            },
-          },
-        },
-        xaxis: {
-          title: {
-            text: "Total Family Members",
-            style: {
-              fontWeight: "600",
-            },
-          },
-          min: 0,
-          labels: {
-            style: {
-              fontSize: "11px",
-            },
-          },
-        },
-        yaxis: {
-          title: {
-            text: "Sick Family Members",
-            style: {
-              fontWeight: "600",
-            },
-          },
-          min: 0,
-          labels: {
-            style: {
-              fontSize: "11px",
-            },
-          },
-        },
-        colors: ["#EC4899"],
-        title: {
-          text: "Family vs Health Correlation",
-          align: "center" as const,
-          style: {
-            fontSize: "16px",
-            fontWeight: "bold",
-            color: "#1F2937",
-          },
-        },
-        tooltip: {
-          custom: ({ series, seriesIndex, dataPointIndex, w }) => {
-            if (dataPointIndex >= 0 && correlationData[dataPointIndex]) {
-              const data = correlationData[dataPointIndex]
-              return `<div class="p-3 bg-white border rounded-lg shadow-lg">
-                <strong class="text-gray-800 text-sm">${data.name}</strong><br/>
-                <span class="text-blue-600 text-xs">Total Family: ${data.x}</span><br/>
-                <span class="text-red-600 text-xs">Sick Family: ${data.y}</span>
-              </div>`
-            }
-            return ""
-          },
-        },
-        grid: {
-          borderColor: "#E5E7EB",
-          strokeDashArray: 3,
-        },
-        markers: {
-          size: 6,
-          strokeWidth: 2,
-          strokeColors: "#fff",
-          hover: {
-            size: 8,
-          },
-        },
-      },
-    }
-  }
-
-  // Employees with Sick Family Members Chart
-  const getEmployeesWithSickFamily = () => {
-    const accountsToUse = propFilteredAccounts || accounts
-    if (!accountsToUse || accountsToUse.length === 0) {
-      return {
-        series: [{ name: "Sick Family Members", data: [] }],
-        options: {
-          chart: { type: "bar" as const, height: 350 },
-          xaxis: { categories: [] },
-          noData: { text: "No data available" },
-        },
-      }
-    }
-
-    const employeesWithSick = accountsToUse
-      .map((account) => {
-        const sickFamilyCount = families.filter(
-          (family) => family.account_id === account.id && family.kondisi_kesehatan === "Sakit",
-        ).length
-        return {
-          name: account.account_name || "Unknown",
-          count: sickFamilyCount,
-        }
-      })
-      .filter((item) => item.count > 0)
-
-    const categories = employeesWithSick.map((item) => item.name)
-    const data = employeesWithSick.map((item) => item.count)
-
-    return {
-      series: [
-        {
-          name: "Sick Family Members",
-          data,
-        },
-      ],
-      options: {
-        chart: {
-          type: "bar" as const,
-          height: 350,
-          toolbar: { show: false },
-          events: {
-            dataPointSelection: (event: any, chartContext: any, config: any) => {
-              if (config && config.dataPointIndex >= 0 && categories[config.dataPointIndex]) {
-                const employeeName = categories[config.dataPointIndex]
-                const newEmployee = selectedEmployee === employeeName ? null : employeeName
-                setSelectedEmployee(newEmployee)
-                onFilterChange?.({ employee: newEmployee, location: selectedLocation, relation: selectedRelation })
-              }
-            },
-          },
-        },
-        plotOptions: {
-          bar: {
-            borderRadius: 6,
-            horizontal: false,
-            columnWidth: "70%",
-          },
-        },
-        dataLabels: {
-          enabled: true,
-          style: {
-            colors: ["#fff"],
-            fontWeight: "bold",
-            fontSize: "12px",
-          },
-        },
-        xaxis: {
-          categories,
-          labels: {
-            rotate: -45,
-            style: {
-              fontSize: "10px",
-              fontWeight: "500",
-            },
-          },
-        },
-        yaxis: {
-          title: {
-            text: "Number of Sick Family Members",
-            style: {
-              fontWeight: "600",
-            },
-          },
-        },
-        colors: ["#F97316"],
-        title: {
-          text: "Employees with Sick Family Members",
-          align: "center" as const,
-          style: {
-            fontSize: "16px",
-            fontWeight: "bold",
-            color: "#1F2937",
-          },
-        },
-        tooltip: {
-          y: {
-            formatter: (val: number) => `${val} sick family members`,
-          },
-          theme: "light",
-        },
-        grid: {
-          borderColor: "#E5E7EB",
-          strokeDashArray: 3,
-        },
-      },
-    }
-  }
-
-  // Top Employees with Most Sick Family Members Chart
-  const getTopEmployeesWithSickFamily = () => {
-    const accountsToUse = propFilteredAccounts || accounts
-    if (!accountsToUse || accountsToUse.length === 0) {
-      return {
-        series: [{ name: "Sick Family Members", data: [] }],
-        options: {
-          chart: { type: "bar" as const, height: 350 },
-          xaxis: { categories: [] },
-          noData: { text: "No data available" },
-        },
-      }
-    }
-
-    const employeesWithSick = accountsToUse
-      .map((account) => {
-        const sickFamilyCount = families.filter(
-          (family) => family.account_id === account.id && family.kondisi_kesehatan === "Sakit",
-        ).length
-        return {
-          name: account.account_name || "Unknown",
-          count: sickFamilyCount,
-        }
-      })
-      .filter((item) => item.count > 0)
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 5)
-
-    const categories = employeesWithSick.map((item) => item.name)
-    const data = employeesWithSick.map((item) => item.count)
-
-    return {
-      series: [
-        {
-          name: "Sick Family Members",
-          data,
-        },
-      ],
-      options: {
-        chart: {
-          type: "bar" as const,
-          height: 350,
-          toolbar: { show: false },
-          events: {
-            dataPointSelection: (event: any, chartContext: any, config: any) => {
-              if (config && config.dataPointIndex >= 0 && categories[config.dataPointIndex]) {
-                const employeeName = categories[config.dataPointIndex]
-                const newEmployee = selectedEmployee === employeeName ? null : employeeName
-                setSelectedEmployee(newEmployee)
-                onFilterChange?.({ employee: newEmployee, location: selectedLocation, relation: selectedRelation })
-              }
-            },
-          },
-        },
-        plotOptions: {
-          bar: {
-            borderRadius: 6,
-            horizontal: true,
-            barHeight: "70%",
-          },
-        },
-        dataLabels: {
-          enabled: true,
-          style: {
-            colors: ["#fff"],
-            fontWeight: "bold",
-            fontSize: "12px",
-          },
-        },
-        xaxis: {
-          categories,
-          labels: {
-            style: {
-              fontSize: "11px",
-              fontWeight: "500",
-            },
-          },
-        },
-        yaxis: {
-          title: {
-            text: "Employees",
-            style: {
-              fontWeight: "600",
-            },
-          },
-        },
-        colors: ["#F59E0B"],
-        title: {
-          text: "Top 5 Employees with Most Sick Family Members",
-          align: "center" as const,
-          style: {
-            fontSize: "16px",
-            fontWeight: "bold",
-            color: "#1F2937",
-          },
-        },
-        tooltip: {
-          y: {
-            formatter: (val: number) => `${val} sick family members`,
-          },
-          theme: "light",
-        },
-        grid: {
-          borderColor: "#E5E7EB",
-          strokeDashArray: 3,
-        },
-      },
-    }
-  }
 
   // Summary Statistics
   const getSummaryStats = () => {
-    const filteredFamilies = getFilteredFamilies()
+    const filteredFamilies = getFilteredAccounts
     if (!filteredFamilies || filteredFamilies.length === 0) {
       return {
         totalFamilies: 0,
@@ -916,23 +502,33 @@ export default function FamilyAnalytics({
       }
     }
 
-    const totalFamilies = filteredFamilies.length
-    const sickFamilies = filteredFamilies.filter((f) => f.kondisi_kesehatan === "Sakit").length
-    const uniqueLocations = new Set(filteredFamilies.map((f) => f.domisili_sekarang).filter(Boolean)).size
+    const totalFamilies = filteredFamilies.reduce(
+      (acc, account) => acc + (account.keluarga?.length ?? 0),
+      0
+    )
+    const uniqueLocations = new Set(
+      filteredFamilies
+        .flatMap((acc) => acc.keluarga ?? [])
+        .map((f) => f.domisili_sekarang)
+        .filter(Boolean)
+    ).size
 
-    const validAges = filteredFamilies
-      .filter((f) => f.family_tanggal_lahir)
-      .map((f) => calculateAge(f.family_tanggal_lahir))
-
-    const avgAge =
-      validAges.length > 0 ? Math.round(validAges.reduce((sum, age) => sum + age, 0) / validAges.length) : 0
+    const validFamilyAges = filteredFamilies
+    .flatMap((acc) => acc.keluarga || []) // ambil semua keluarga dari tiap akun
+    .filter((fam) => fam.tanggal_lahir)   // hanya yang punya tanggal lahir
+    .map((fam) => calculateAge(fam.tanggal_lahir))
+    .filter((age) => !isNaN(age))
+    
+   
+      const avgAge =
+        validFamilyAges.length > 0
+          ? Math.round(validFamilyAges.reduce((sum, age) => sum + age, 0) / validFamilyAges.length)
+          : 0
 
     return {
       totalFamilies,
-      sickFamilies,
       uniqueLocations,
-      avgAge,
-      healthyFamilies: totalFamilies - sickFamilies,
+      avgAge
     }
   }
 
@@ -993,7 +589,7 @@ export default function FamilyAnalytics({
       )}
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <Card className="hover:shadow-lg transition-all duration-300 hover:scale-105 bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -1009,37 +605,6 @@ export default function FamilyAnalytics({
           </CardContent>
         </Card>
 
-        <Card className="hover:shadow-lg transition-all duration-300 hover:scale-105 bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-green-700">Healthy Families</p>
-                <p className="text-2xl font-bold text-green-600">{stats.healthyFamilies}</p>
-                <p className="text-xs text-green-600 mt-1">
-                  {stats.totalFamilies > 0 ? ((stats.healthyFamilies / stats.totalFamilies) * 100).toFixed(1) : 0}%
-                  healthy
-                </p>
-              </div>
-              <Activity className="w-8 h-8 text-green-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-lg transition-all duration-300 hover:scale-105 bg-gradient-to-br from-red-50 to-red-100 border-red-200">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-red-700">Sick Families</p>
-                <p className="text-2xl font-bold text-red-600">{stats.sickFamilies}</p>
-                <p className="text-xs text-red-600 mt-1">
-                  {stats.totalFamilies > 0 ? ((stats.sickFamilies / stats.totalFamilies) * 100).toFixed(1) : 0}% need
-                  care
-                </p>
-              </div>
-              <Heart className="w-8 h-8 text-red-600" />
-            </div>
-          </CardContent>
-        </Card>
 
         <Card className="hover:shadow-lg transition-all duration-300 hover:scale-105 bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
           <CardContent className="p-4">
@@ -1136,27 +701,10 @@ export default function FamilyAnalytics({
 
       {/* Second Row - 3 Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Health Status */}
-        <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-red-50 border-red-200">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Heart className="w-5 h-5 text-red-600" />
-              Health Status Overview
-            </CardTitle>
-            <CardDescription className="text-sm">Health condition distribution of family members.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Chart
-              options={getHealthStatusChart().options}
-              series={getHealthStatusChart().series}
-              type="pie"
-              height={350}
-            />
-          </CardContent>
-        </Card>
+     
 
         {/* Age Distribution */}
-        <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-indigo-50 border-indigo-200">
+        {/* <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-indigo-50 border-indigo-200">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
               <TrendingUp className="w-5 h-5 text-indigo-600" />
@@ -1172,118 +720,14 @@ export default function FamilyAnalytics({
               height={350}
             />
           </CardContent>
-        </Card>
+        </Card> */}
 
-        {/* Correlation Analysis */}
-        <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-pink-50 border-pink-200">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Activity className="w-5 h-5 text-pink-600" />
-              Family vs Health Correlation
-            </CardTitle>
-            <CardDescription className="text-sm">
-              Click points to filter by employee. Correlation between family size and health issues.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Chart
-              options={getFamilyVsSickCorrelation().options}
-              series={getFamilyVsSickCorrelation().series}
-              type="scatter"
-              height={350}
-            />
-          </CardContent>
-        </Card>
+       
       </div>
 
-      {/* Third Row - Additional Health Analysis Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Employees with Sick Family Members */}
-        <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-orange-50 border-orange-200">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <AlertTriangle className="w-5 h-5 text-orange-600" />
-              Employees with Sick Family Members
-            </CardTitle>
-            <CardDescription className="text-sm">
-              Click bars to filter by employee. Shows employees who have family members with health issues.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Chart
-              options={getEmployeesWithSickFamily().options}
-              series={getEmployeesWithSickFamily().series}
-              type="bar"
-              height={350}
-            />
-          </CardContent>
-        </Card>
+   
 
-        {/* Top Employees with Most Sick Family Members */}
-        <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-amber-50 border-amber-200">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <TrendingUp className="w-5 h-5 text-amber-600" />
-              Top Employees with Most Sick Family Members
-            </CardTitle>
-            <CardDescription className="text-sm">
-              Click bars to filter by employee. Ranking of employees by number of sick family members.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Chart
-              options={getTopEmployeesWithSickFamily().options}
-              series={getTopEmployeesWithSickFamily().series}
-              type="bar"
-              height={350}
-            />
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Insights Panel */}
-      <Card className="bg-gradient-to-r from-blue-50 via-purple-50 to-pink-50 border-blue-200 hover:shadow-xl transition-all duration-300">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <AlertTriangle className="w-5 h-5 text-amber-600" />
-            Key Insights & Recommendations
-          </CardTitle>
-          <CardDescription>Data-driven insights from family analytics</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div className="p-4 bg-white rounded-lg shadow-sm border border-red-100 hover:shadow-md transition-shadow">
-              <div className="flex items-center gap-2 mb-2">
-                <Heart className="w-4 h-4 text-red-500" />
-                <h4 className="font-semibold text-gray-900">Health Risk Assessment</h4>
-              </div>
-              <p className="text-sm text-gray-700">
-                {stats.totalFamilies > 0 ? Math.round((stats.sickFamilies / stats.totalFamilies) * 100) : 0}% of family
-                members have health issues
-              </p>
-              <p className="text-xs text-gray-500 mt-1">Consider enhanced health benefits</p>
-            </div>
-
-            <div className="p-4 bg-white rounded-lg shadow-sm border border-green-100 hover:shadow-md transition-shadow">
-              <div className="flex items-center gap-2 mb-2">
-                <MapPin className="w-4 h-4 text-green-500" />
-                <h4 className="font-semibold text-gray-900">Geographic Spread</h4>
-              </div>
-              <p className="text-sm text-gray-700">Families across {stats.uniqueLocations} locations</p>
-              <p className="text-xs text-gray-500 mt-1">Plan location-based support programs</p>
-            </div>
-
-            <div className="p-4 bg-white rounded-lg shadow-sm border border-purple-100 hover:shadow-md transition-shadow">
-              <div className="flex items-center gap-2 mb-2">
-                <Baby className="w-4 h-4 text-purple-500" />
-                <h4 className="font-semibold text-gray-900">Age Demographics</h4>
-              </div>
-              <p className="text-sm text-gray-700">Average family age: {stats.avgAge} years</p>
-              <p className="text-xs text-gray-500 mt-1">Tailor age-appropriate benefits</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+     
     </div>
   )
 }

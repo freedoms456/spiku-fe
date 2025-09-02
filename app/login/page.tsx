@@ -25,10 +25,14 @@ export default function LoginPage() {
         "/api/login",
         { email, password },
         { withCredentials: true }
-      );
-
+      )
       // simpan user di localStorage
       localStorage.setItem("user", JSON.stringify(res.data));
+
+      
+      const accounts = await api.get("/api/accounts", { withCredentials: true });
+
+      localStorage.setItem("accounts", JSON.stringify(accounts.data));
 
       // redirect ke halaman setelah login
       router.push("/homepage");

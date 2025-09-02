@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -29,64 +29,61 @@ interface CertificationAnalyticsProps {
 }
 
 export default function CertificationAnalytics({
+  filteredCertifications: propFilteredCertifications,
   filteredAccounts: propFilteredAccounts,
   onFilterChange,
 }: CertificationAnalyticsProps = {}) {
   const [selectedCertType, setSelectedCertType] = useState<string | null>(null)
   const [selectedIssuer, setSelectedIssuer] = useState<string | null>(null)
-  const [selectedExpired, setSelectedExpired] = useState<string | null>(null)
+  const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null)
 
   // Get filtered certifications based on selections
-  
-  const getFilteredAccounts = useMemo(() => {
-    
-    let filtered = propFilteredAccounts
-    
-    const sertifikasiList = filtered.flatMap((account) =>
-    (account.account_sertifikasi || []).map((sertifikasi) => ({
-      ...sertifikasi,
-      account_name: account.account_name, // ikut sertakan nama account
-    }))
-  )
+  const getFilteredCertifications = () => {
+    if (propFilteredCertifications) {
+      return propFilteredCertifications
+    }
 
-    return sertifikasiList
-  
-  }, [propFilteredAccounts, selectedExpired, selectedIssuer, selectedCertType])
-  
+    let filtered = certifications
 
+    if (selectedCertType) {
+      filtered = filtered.filter((cert) => cert.certification_nama === selectedCertType)
+    }
+
+    if (selectedIssuer) {
+      filtered = filtered.filter((cert) => cert.certification_penerbit === selectedIssuer)
+    }
+
+    if (selectedEmployee) {
+      const employee = propFilteredAccounts
+        ? propFilteredAccounts.find((acc) => acc.account_name === selectedEmployee)
+        : accounts.find((acc) => acc.account_name === selectedEmployee)
+      if (employee) {
+        filtered = filtered.filter((cert) => cert.account_id === employee.id)
+      }
+    }
+
+    return filtered
+  }
 
   // Helper function to check if certificate is active
-  const isCertificateActive = (expiryDate: string): boolean => {
-    if (!expiryDate) return true; // kosong dianggap Active
-  
-    // pecah string "dd-mm-yyyy"
-    const [day, month, year] = expiryDate.split("-");
-    if (!day || !month || !year) return true; // kalau formatnya salah, anggap Active
-  
-    // konversi ke format yyyy-mm-dd agar valid untuk Date()
-    const parsedDate = new Date(`${year}-${month}-${day}T00:00:00`);
-  
-    return parsedDate > new Date();
-  };
+  const isCertificateActive = (expiryDate: string) => {
+    if (!expiryDate) return false
+    return new Date(expiryDate) > new Date()
+  }
 
   // Helper function to get months until expiry
   const getMonthsUntilExpiry = (expiryDate: string) => {
     if (!expiryDate) return -1
-  
-    // Parse format dd-mm-yyyy
-    const [day, month, year] = expiryDate.split("-").map(Number)
-    const expiry = new Date(year, month - 1, day) // month - 1 karena JS mulai dari 0
-    
+    const expiry = new Date(expiryDate)
     const now = new Date()
     const diffTime = expiry.getTime() - now.getTime()
     const diffMonths = Math.ceil(diffTime / (1000 * 60 * 60 * 24 * 30))
-  
     return diffMonths
   }
 
   // 1. Certifications by Type Chart
   const getCertificationsByType = () => {
-    const filteredCerts = getFilteredAccounts
+    const filteredCerts = getFilteredCertifications()
     if (!filteredCerts || filteredCerts.length === 0) {
       return {
         series: [{ name: "Certifications", data: [] }],
@@ -100,7 +97,7 @@ export default function CertificationAnalytics({
 
     const typeCounts = filteredCerts.reduce(
       (acc, cert) => {
-        const type = cert.name || "Unknown"
+        const type = cert.certification_nama || "Unknown"
         acc[type] = (acc[type] || 0) + 1
         return acc
       },
@@ -133,7 +130,7 @@ export default function CertificationAnalytics({
                 const certType = sortedTypes[config.dataPointIndex][0]
                 const newCertType = selectedCertType === certType ? null : certType
                 setSelectedCertType(newCertType)
-                onFilterChange?.({ certType: newCertType, issuer: selectedIssuer, expired: selectedExpired })
+                onFilterChange?.({ certType: newCertType, issuer: selectedIssuer, employee: selectedEmployee })
               }
             },
           },
@@ -194,7 +191,7 @@ export default function CertificationAnalytics({
 
   // 2. Certifications by Issuer Chart
   const getCertificationsByIssuer = () => {
-    const filteredCerts = getFilteredAccounts
+    const filteredCerts = getFilteredCertifications()
     if (!filteredCerts || filteredCerts.length === 0) {
       return {
         series: [{ name: "Certificates Issued", data: [] }],
@@ -241,7 +238,7 @@ const sortedIssuers = Object.entries(issuerCounts)
                 const issuer = categories[config.dataPointIndex]
                 const newIssuer = selectedIssuer === issuer ? null : issuer
                 setSelectedIssuer(newIssuer)
-                onFilterChange?.({ certType: selectedCertType, issuer: newIssuer, expired: selectedExpired })
+                onFilterChange?.({ certType: selectedCertType, issuer: newIssuer, employee: selectedEmployee })
               }
             },
           },
@@ -303,21 +300,19 @@ const sortedIssuers = Object.entries(issuerCounts)
 
   // 3. Active vs Expired Certificates Chart
   const getActiveVsExpiredChart = () => {
-    const filteredCerts = getFilteredAccounts
+    const filteredCerts = getFilteredCertifications()
     if (!filteredCerts || filteredCerts.length === 0) {
       return {
         series: [],
         options: {
-          chart: { type: "pie" as const, height: 350 , 
-         
-          },
+          chart: { type: "pie" as const, height: 350 },
           labels: [],
           noData: { text: "No data available" },
         },
       }
     }
 
-    const activeCerts = filteredCerts.filter((cert) => isCertificateActive(cert.masa_berlaku)).length
+    const activeCerts = filteredCerts.filter((cert) => isCertificateActive(cert.certification_tanggal_berakhir)).length
     const expiredCerts = filteredCerts.length - activeCerts
 
     return {
@@ -326,30 +321,6 @@ const sortedIssuers = Object.entries(issuerCounts)
         chart: {
           type: "pie" as const,
           height: 350,
-          events: {
-            dataPointSelection: (
-              event: any,
-              chartContext: any,
-              config: { dataPointIndex: number }
-            ) => {
-              const idx = config?.dataPointIndex;
-              if (typeof idx === "number" && idx >= 0) {
-                // ambil label sesuai slice yang di-klik
-                const label = ["Active", "Expired"][idx];
-    
-                // toggle (klik lagi = batal)
-                const newStatus = selectedExpired === label ? null : label;
-    
-                setSelectedExpired(newStatus);
-    
-                onFilterChange?.({
-                  certType: selectedCertType,
-                  issuer: selectedIssuer,
-                  expired: newStatus, // kirim Active / Expired / null
-                });
-              }
-            }
-          },
         },
         labels: ["Active", "Expired"],
         colors: ["#10B981", "#EF4444"],
@@ -411,7 +382,7 @@ const sortedIssuers = Object.entries(issuerCounts)
 
   // 4. Certificates Issued by Year Timeline
   const getCertificatesByYearTimeline = () => {
-    const filteredCerts = getFilteredAccounts
+    const filteredCerts = getFilteredCertifications()
     if (!filteredCerts || filteredCerts.length === 0) {
       return {
         series: [{ name: "Certificates Issued", data: [] }],
@@ -423,21 +394,20 @@ const sortedIssuers = Object.entries(issuerCounts)
       }
     }
 
-    const yearCounts = filteredCerts.reduce((acc, cert) => {
-      if (cert.tanggal_sertifikasi) {
-        const [day, month, year] = cert.tanggal_sertifikasi.split("-").map(Number)
-        if (!day || !month || !year) return acc; // skip invalid
-        acc[year.toString()] = (acc[year.toString()] || 0) + 1
-      }
-      return acc
-    }, {} as Record<string, number>)
+    const yearCounts = filteredCerts.reduce(
+      (acc, cert) => {
+        if (cert.certification_tanggal_terbit) {
+          const year = new Date(cert.certification_tanggal_terbit).getFullYear().toString()
+          acc[year] = (acc[year] || 0) + 1
+        }
+        return acc
+      },
+      {} as Record<string, number>,
+    )
 
     const sortedYears = Object.entries(yearCounts).sort((a, b) => a[0].localeCompare(b[0]))
     const categories = sortedYears.map(([year, _]) => year)
     const data = sortedYears.map(([_, count]) => count)
-
-    console.log(sortedYears)
-    console.log(data)
 
     return {
       series: [
@@ -515,7 +485,7 @@ const sortedIssuers = Object.entries(issuerCounts)
 
     const employeeCertCounts = accountsToUse
       .map((account) => {
-        const certCount = (getFilteredAccounts || certifications).filter(
+        const certCount = (propFilteredCertifications || certifications).filter(
           (cert) => cert.account_id === account.id,
         ).length
         return {
@@ -544,7 +514,16 @@ const sortedIssuers = Object.entries(issuerCounts)
           type: "bar" as const,
           height: 350,
           toolbar: { show: false },
-         
+          events: {
+            dataPointSelection: (event: any, chartContext: any, config: any) => {
+              if (config && config.dataPointIndex >= 0 && employeeCertCounts[config.dataPointIndex]) {
+                const employee = employeeCertCounts[config.dataPointIndex].name
+                const newEmployee = selectedEmployee === employee ? null : employee
+                setSelectedEmployee(newEmployee)
+                onFilterChange?.({ certType: selectedCertType, issuer: selectedIssuer, employee: newEmployee })
+              }
+            },
+          },
         },
         plotOptions: {
           bar: {
@@ -603,68 +582,36 @@ const sortedIssuers = Object.entries(issuerCounts)
 
   // 6. Certificates Expiring Soon Chart
   const getCertificatesExpiringSoon = (): {
-    series: ApexAxisChartSeries;
-    options: ApexOptions;
-  } => {
-    const certsToUse = getFilteredAccounts;
-  
-    if (!certsToUse || certsToUse.length === 0) {
-      return {
-        series: [{ name: "Expiring Certificates", data: [] }],
-        options: {
-          chart: { type: "bar", height: 350 },
-          xaxis: { categories: [] },
-          noData: { text: "No data available" },
-        },
-      };
-    }
-    // flatten sertifikasi dari accounts
-    const allCerts = getFilteredAccounts
-    
-    // ambil bulan dari masa_berlaku (format dd-mm-yyyy)
-    const countsByMonth: Record<string, number> = {};
-  
-    allCerts.forEach((cert: any) => {
-      if (cert.masa_berlaku) {
-        const [day, month, year] = cert.masa_berlaku.split("-").map(Number);
-        const expiryDate = new Date(year, month - 1, day);
+  series: ApexAxisChartSeries;
+  options: ApexOptions;
+} => {
+  const certsToUse = propFilteredCertifications || certifications;
 
-        if (expiryDate > new Date() && expiryDate.getFullYear() === new Date().getFullYear()) {
-          const monthName = expiryDate.toLocaleString("default", { month: "short" });
-          countsByMonth[monthName] = (countsByMonth[monthName] || 0) + 1;
-        }
-        // console.log(cert.masa_berlaku)
-      }
-    });
-    
-
-    // urutkan sesuai bulan kalender
-    const months = [
-      "Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"
-    ];
-    const categories: string[] = [];
-    const data: number[] = [];
-  
-    months.forEach((m) => {
-      if (countsByMonth[m]) {
-        categories.push(m);
-        data.push(countsByMonth[m]);
-      }
-    });
-    
+  if (!certsToUse || certsToUse.length === 0) {
     return {
-      series: [{ name: "Expiring Certificates", data }],
+      series: [{ name: "Expiring Certificates", data: [] }],
       options: {
         chart: { type: "bar", height: 350 },
-        xaxis: { categories },
+        xaxis: { categories: [] },
+        noData: { text: "No data available" },
       },
     };
+  }
+
+  // contoh jika ada data:
+  return {
+    series: [{ name: "Expiring Certificates", data: [10, 20, 15] }],
+    options: {
+      chart: { type: "bar", height: 350 },
+      xaxis: { categories: ["Jan", "Feb", "Mar"] },
+    },
   };
+};
 
   // 7. Top Employees with Most Active Certifications
   const getTopEmployeesActiveChart = () => {
     const accountsToUse = propFilteredAccounts || accounts
-    const certsToUse = getFilteredAccounts || certifications
+    const certsToUse = propFilteredCertifications || certifications
 
     if (!accountsToUse || accountsToUse.length === 0) {
       return {
@@ -765,7 +712,7 @@ const sortedIssuers = Object.entries(issuerCounts)
 
   // Summary Statistics
   const getSummaryStats = () => {
-    const filteredCerts = getFilteredAccounts
+    const filteredCerts = getFilteredCertifications()
     if (!filteredCerts || filteredCerts.length === 0) {
       return {
         totalCertifications: 0,
@@ -777,39 +724,17 @@ const sortedIssuers = Object.entries(issuerCounts)
       }
     }
 
-   // flatten semua sertifikasi dari accounts yang sudah difilter
-        const allCerts = filteredCerts.flatMap((acc: any) => acc.name || [])
-
-        const totalCertifications = allCerts.length
-
-        const activeCertifications = allCerts.filter((cert: any) =>
-          isCertificateActive(cert.masa_berlaku)
-        ).length
-
-        const expiredCertifications = totalCertifications - activeCertifications
-        const expiringSoon = filteredCerts.filter((cert: any) => {
-          const monthsUntil = getMonthsUntilExpiry(cert.masa_berlaku)
-          return monthsUntil > 0 && monthsUntil <= 6
-        }).length
-
-
-        const certsByAccount: Record<string, Set<string>> = {};
-
-        filteredCerts.forEach((cert) => {
-          if (cert.account_name && cert.name) {
-            if (!certsByAccount[cert.account_name]) {
-              certsByAccount[cert.account_name] = new Set();
-            }
-            certsByAccount[cert.account_name].add(cert.name);
-          }
-        });
-        
-        // Hitung orang yang punya lebih dari 2 sertifikat unik
-        const uniqueTypes = Object.values(certsByAccount).filter(
-          (certSet) => certSet.size > 2
-        ).length;
-
-        const uniqueIssuers = 0
+    const totalCertifications = filteredCerts.length
+    const activeCertifications = filteredCerts.filter((cert) =>
+      isCertificateActive(cert.certification_tanggal_berakhir),
+    ).length
+    const expiredCertifications = totalCertifications - activeCertifications
+    const expiringSoon = filteredCerts.filter((cert) => {
+      const monthsUntil = getMonthsUntilExpiry(cert.certification_tanggal_berakhir)
+      return monthsUntil > 0 && monthsUntil <= 6
+    }).length
+    const uniqueIssuers = new Set(filteredCerts.map((cert) => cert.certification_penerbit).filter(Boolean)).size
+    const uniqueTypes = new Set(filteredCerts.map((cert) => cert.certification_nama).filter(Boolean)).size
 
     return {
       totalCertifications,
@@ -826,13 +751,56 @@ const sortedIssuers = Object.entries(issuerCounts)
   const clearFilters = () => {
     setSelectedCertType(null)
     setSelectedIssuer(null)
-    setSelectedExpired(null)
-    onFilterChange?.({ certType: null, issuer: null, expired: null })
+    setSelectedEmployee(null)
+    onFilterChange?.({ certType: null, issuer: null, employee: null })
   }
 
   return (
     <div className="space-y-6">
-
+      {/* Filter Status and Clear Button */}
+      {(selectedCertType || selectedIssuer || selectedEmployee) && (
+        <Card className="border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-semibold text-blue-800">Active Filters:</span>
+                {selectedCertType && (
+                  <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-200 transition-colors">
+                    <Certificate className="w-3 h-3 mr-1" />
+                    {selectedCertType.length > 20 ? selectedCertType.substring(0, 20) + "..." : selectedCertType}
+                  </Badge>
+                )}
+                {selectedIssuer && (
+                  <Badge
+                    variant="secondary"
+                    className="bg-green-100 text-green-800 hover:bg-green-200 transition-colors"
+                  >
+                    <Award className="w-3 h-3 mr-1" />
+                    {selectedIssuer}
+                  </Badge>
+                )}
+                {selectedEmployee && (
+                  <Badge
+                    variant="secondary"
+                    className="bg-orange-100 text-orange-800 hover:bg-orange-200 transition-colors"
+                  >
+                    <Users className="w-3 h-3 mr-1" />
+                    {selectedEmployee}
+                  </Badge>
+                )}
+              </div>
+              <Button
+                onClick={clearFilters}
+                variant="outline"
+                size="sm"
+                className="hover:bg-blue-100 transition-colors bg-transparent"
+              >
+                Clear All Filters
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
@@ -1121,7 +1089,7 @@ const sortedIssuers = Object.entries(issuerCounts)
                 <h4 className="font-semibold text-gray-900">Certification Diversity</h4>
               </div>
               <p className="text-sm text-gray-700">
-                {stats.uniqueTypes} Orang Yang memiliki Sertifikat dari lebih dari 2 
+                {stats.uniqueTypes} different certificate types from {stats.uniqueIssuers} issuers
               </p>
               <p className="text-xs text-gray-500 mt-1">Diverse professional development</p>
             </div>

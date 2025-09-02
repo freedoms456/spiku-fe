@@ -44,6 +44,18 @@ export default function Homepage() {
           </Card>
         </Link>
 
+        <Link href="/pemeriksaan">
+          <Card className="group hover:shadow-xl hover:scale-105 transition-all cursor-pointer">
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                Beri Saya Data Pemeriksa untuk membuat Tim
+                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              </CardTitle>
+             
+            </CardHeader>
+          </Card>
+        </Link>
+
       </div>
     </div>
   );

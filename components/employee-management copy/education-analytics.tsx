@@ -1,6 +1,6 @@
 "use client"
 
-import { useState,useMemo } from "react"
+import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -17,6 +17,7 @@ interface EducationAnalyticsProps {
 const Chart = dynamic(() => import("react-apexcharts"), { ssr: false })
 
 export default function EducationAnalytics({
+  filteredEducations: propFilteredEducations,
   filteredAccounts: propFilteredAccounts,
   onFilterChange,
 }: EducationAnalyticsProps = {}) {
@@ -25,18 +26,31 @@ export default function EducationAnalytics({
   const [selectedInstitution, setSelectedInstitution] = useState<string | null>(null)
 
   // Get filtered educations based on selections
-  const getFilteredAccounts = useMemo(() => {
-    
-    let filtered = propFilteredAccounts
-    
+  const getFilteredEducations = () => {
+    if (propFilteredEducations) {
+      return propFilteredEducations
+    }
+
+    let filtered = educations
+
+    if (selectedLevel) {
+      filtered = filtered.filter((edu) => edu.education_tingkat === selectedLevel)
+    }
+
+    if (selectedMajor) {
+      filtered = filtered.filter((edu) => edu.education_jurusan === selectedMajor)
+    }
+
+    if (selectedInstitution) {
+      filtered = filtered.filter((edu) => edu.education_institusi === selectedInstitution)
+    }
 
     return filtered
-  }, [ propFilteredAccounts, selectedLevel, selectedMajor, selectedInstitution, accounts])
-
+  }
 
   // Education Level Distribution Chart
   const getEducationLevelDistribution = () => {
-    const filteredEducations = getFilteredAccounts.flatMap((acc) => acc.account_pendidikan || []) 
+    const filteredEducations = getFilteredEducations()
     if (!filteredEducations || filteredEducations.length === 0) {
       return {
         series: [],
@@ -50,7 +64,7 @@ export default function EducationAnalytics({
 
     const levelCounts = filteredEducations.reduce(
       (acc, education) => {
-        const level = education.jenjang || "Unknown"
+        const level = education.education_tingkat || "Unknown"
         acc[level] = (acc[level] || 0) + 1
         return acc
       },
@@ -128,7 +142,7 @@ export default function EducationAnalytics({
 
   // Most Common Majors Chart
   const getMostCommonMajors = () => {
-    const filteredEducations = getFilteredAccounts
+    const filteredEducations = getFilteredEducations()
     if (!filteredEducations || filteredEducations.length === 0) {
       return {
         series: [{ name: "Employees", data: [] }],
@@ -140,16 +154,18 @@ export default function EducationAnalytics({
       }
     }
 
-    const majorCounts = filteredEducations
-    .flatMap((acc) => acc.account_pendidikan || []) // ambil semua pendidikan
-    .reduce((acc, education) => {
-      const major = education.jurusan || "Unknown"
-      acc[major] = (acc[major] || 0) + 1
-      return acc
-    }, {} as Record<string, number>)
-      const sortedMajors = Object.entries(majorCounts)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 8)
+    const majorCounts = filteredEducations.reduce(
+      (acc, education) => {
+        const major = education.education_jurusan || "Unknown"
+        acc[major] = (acc[major] || 0) + 1
+        return acc
+      },
+      {} as Record<string, number>,
+    )
+
+    const sortedMajors = Object.entries(majorCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
 
     const categories = sortedMajors.map(([major, _]) => major)
     const data = sortedMajors.map(([_, count]) => count)
@@ -235,9 +251,7 @@ export default function EducationAnalytics({
 
   // Graduation Year Distribution Chart
   const getGraduationYearDistribution = () => {
-   
-   
-    const filteredEducations = getFilteredAccounts.flatMap((acc) => acc.account_pendidikan || [])
+    const filteredEducations = getFilteredEducations()
     if (!filteredEducations || filteredEducations.length === 0) {
       return {
         series: [{ name: "Graduates", data: [] }],
@@ -251,7 +265,7 @@ export default function EducationAnalytics({
 
     const yearCounts = filteredEducations.reduce(
       (acc, education) => {
-        const year = education.tahun_lulus || "Unknown"
+        const year = education.education_tahun_lulus || "Unknown"
         acc[year] = (acc[year] || 0) + 1
         return acc
       },
@@ -328,7 +342,7 @@ export default function EducationAnalytics({
 
   // GPA Distribution by Education Level Chart
   const getGPADistributionByLevel = () => {
-    const filteredEducations = getFilteredAccounts
+    const filteredEducations = getFilteredEducations()
     if (!filteredEducations || filteredEducations.length === 0) {
       return {
         series: [],
@@ -409,8 +423,8 @@ export default function EducationAnalytics({
 
   // Top Institutions Chart
   const getTopInstitutions = () => {
-    const accounts = getFilteredAccounts // pastikan ini function
-    if (!accounts || accounts.length === 0) {
+    const filteredEducations = getFilteredEducations()
+    if (!filteredEducations || filteredEducations.length === 0) {
       return {
         series: [{ name: "Alumni", data: [] }],
         options: {
@@ -420,28 +434,32 @@ export default function EducationAnalytics({
         },
       }
     }
-  
-    // hitung institusi
-    const institutionCounts = accounts
-      .flatMap((acc) => acc.account_pendidikan || [])
-      .reduce((acc, education) => {
-        const institution = education.institusi?.trim() || "Unknown"
+
+    const institutionCounts = filteredEducations.reduce(
+      (acc, education) => {
+        const institution = education.education_institusi || "Unknown"
         acc[institution] = (acc[institution] || 0) + 1
         return acc
-      }, {} as Record<string, number>)
-  
-    // sort top 6
+      },
+      {} as Record<string, number>,
+    )
+
     const sortedInstitutions = Object.entries(institutionCounts)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 6)
-  
-    const categories = sortedInstitutions.map(([institution]) =>
+
+    const categories = sortedInstitutions.map(([institution, _]) =>
       institution.length > 15 ? institution.substring(0, 15) + "..." : institution,
     )
     const data = sortedInstitutions.map(([_, count]) => count)
-  
+
     return {
-      series: [{ name: "Alumni", data }],
+      series: [
+        {
+          name: "Alumni",
+          data,
+        },
+      ],
       options: {
         chart: {
           type: "bar" as const,
@@ -486,7 +504,9 @@ export default function EducationAnalytics({
         yaxis: {
           title: {
             text: "Number of Alumni",
-            style: { fontWeight: "600" },
+            style: {
+              fontWeight: "600",
+            },
           },
         },
         colors: ["#F59E0B"],
@@ -515,24 +535,25 @@ export default function EducationAnalytics({
 
   // Multiple Degrees Chart
   const getMultipleDegreesChart = () => {
-    const accountsToUse = getFilteredAccounts
+    const accountsToUse = propFilteredAccounts || accounts
     if (!accountsToUse || accountsToUse.length === 0) {
       return {
         series: [],
-        options: { chart: { type: "pie" as const, height: 350 }, labels: [], noData: { text: "No data available" } },
+        options: {
+          chart: { type: "pie" as const, height: 350 },
+          labels: [],
+          noData: { text: "No data available" },
+        },
       }
     }
-  
-    const validLevels = ["S1", "S2", "S3"]
-  
-    // Hitung jumlah pendidikan valid tiap pegawai
+
     const employeeEducationCount = accountsToUse.map((account) => ({
       name: account.account_name || "Unknown",
-      count: (account.account_pendidikan || []).filter((edu:any) => validLevels.includes(edu.jenjang)).length,
+      count: educations.filter((edu) => edu.account_id === account.id).length,
     }))
-  
-    const singleDegree = employeeEducationCount.filter(emp => emp.count === 1).length
-    const multipleDegrees = employeeEducationCount.filter(emp => emp.count > 1).length
+
+    const singleDegree = employeeEducationCount.filter((emp) => emp.count === 1).length
+    const multipleDegrees = employeeEducationCount.filter((emp) => emp.count > 1).length
 
     return {
       series: [singleDegree, multipleDegrees],
@@ -577,7 +598,7 @@ export default function EducationAnalytics({
 
   // Average GPA by Institution Chart
   const getAverageGPAByInstitution = () => {
-    const filteredEducations = getFilteredAccounts
+    const filteredEducations = getFilteredEducations()
     if (!filteredEducations || filteredEducations.length === 0) {
       return {
         series: [{ name: "Average GPA", data: [] }],
@@ -588,21 +609,22 @@ export default function EducationAnalytics({
         },
       }
     }
-    
-    const institutionGPAs = filteredEducations.reduce((acc, account) => {
-      (account.account_pendidikan || []).forEach((education) => {
-        const institution = education.institusi || "Unknown"
-        const gpa = Number.parseFloat(education.gpa)
+
+    const institutionGPAs = filteredEducations.reduce(
+      (acc, education) => {
+        const institution = education.education_institusi || "Unknown"
+        const gpa = Number.parseFloat(education.education_ipk)
         if (!isNaN(gpa)) {
           if (!acc[institution]) {
             acc[institution] = []
           }
           acc[institution].push(gpa)
         }
-      })
-      return acc
-    }, {} as Record<string, number[]>)
-    
+        return acc
+      },
+      {} as Record<string, number[]>,
+    )
+
     const institutionAverages = Object.entries(institutionGPAs)
       .map(([institution, gpas]) => ({
         institution,
@@ -690,7 +712,7 @@ export default function EducationAnalytics({
 
   // Education Level vs GPA Relationship Chart
   const getEducationLevelVsGPA = () => {
-    const filteredEducations = getFilteredAccounts
+    const filteredEducations = getFilteredEducations()
     if (!filteredEducations || filteredEducations.length === 0) {
       return {
         series: [],
@@ -701,19 +723,17 @@ export default function EducationAnalytics({
       }
     }
 
-    const levelGPAData = getFilteredAccounts
-      .flatMap((account) =>
-        (account.account_pendidikan || [])
-          .filter((education) => education.jenjang && education.gpa)
-          .map((education) => ({
-            x: education.jenjang,
-            y: Number.parseFloat(education.gpa),
-            name: account.account_name || "Unknown",
-            major: education.jurusan || "Unknown",
-          }))
-      )
+    const levelGPAData = filteredEducations
+      .filter((education) => education.education_tingkat && education.education_ipk)
+      .map((education) => ({
+        x: education.education_tingkat,
+        y: Number.parseFloat(education.education_ipk),
+        name: accounts.find((acc) => acc.id === education.account_id)?.account_name || "Unknown",
+        major: education.education_jurusan || "Unknown",
+      }))
       .filter((item) => !isNaN(item.y))
 
+    // Group by education level for better visualization
     const levels = ["D3", "S1", "S2", "S3"]
     const series = levels.map((level) => ({
       name: level,
@@ -803,7 +823,7 @@ export default function EducationAnalytics({
 
   // High GPA Graduates by Major Chart
   const getHighGPAGraduatesByMajor = () => {
-    const filteredEducations = getFilteredAccounts.flatMap((acc) => acc.account_pendidikan || []) 
+    const filteredEducations = getFilteredEducations()
     if (!filteredEducations || filteredEducations.length === 0) {
       return {
         series: [{ name: "High GPA Graduates", data: [] }],
@@ -816,14 +836,13 @@ export default function EducationAnalytics({
     }
 
     const highGPAEducations = filteredEducations.filter((edu) => {
-      const gpa = Number.parseFloat(edu.gpa)
-      const gpaStr = (edu.gpa || "").replace(",", ".")
-      return !isNaN(gpaStr) && gpaStr > 3.5
+      const gpa = Number.parseFloat(edu.education_ipk)
+      return !isNaN(gpa) && gpa > 3.5
     })
 
     const majorCounts = highGPAEducations.reduce(
       (acc, education) => {
-        const major = education.jurusan || "Unknown"
+        const major = education.education_jurusan || "Unknown"
         acc[major] = (acc[major] || 0) + 1
         return acc
       },
@@ -834,7 +853,6 @@ export default function EducationAnalytics({
       .sort((a, b) => b[1] - a[1])
       .slice(0, 8)
 
-    // console.log("Major Counts:", majorCounts)
     const categories = sortedMajors.map(([major, _]) => major)
     const data = sortedMajors.map(([_, count]) => count)
 
@@ -910,7 +928,7 @@ export default function EducationAnalytics({
 
   // Summary Statistics
   const getSummaryStats = () => {
-    const filteredEducations = getFilteredAccounts.flatMap((acc) => acc.account_pendidikan || []) 
+    const filteredEducations = getFilteredEducations()
     if (!filteredEducations || filteredEducations.length === 0) {
       return {
         totalEducations: 0,
@@ -922,20 +940,14 @@ export default function EducationAnalytics({
     }
 
     const totalEducations = filteredEducations.length
-    const uniqueInstitutions = new Set(filteredEducations.map((edu) => edu.institusi).filter(Boolean)).size
+    const uniqueInstitutions = new Set(filteredEducations.map((edu) => edu.education_institusi).filter(Boolean)).size
 
-    const validGPAs = filteredEducations
-    .map((edu) => Number.parseFloat((edu.gpa || "").toString().replace(",", ".")))
-    .filter((gpa) => !isNaN(gpa))
+    const validGPAs = filteredEducations.map((edu) => Number.parseFloat(edu.education_ipk)).filter((gpa) => !isNaN(gpa))
 
     const avgGPA =
       validGPAs.length > 0 ? (validGPAs.reduce((sum, gpa) => sum + gpa, 0) / validGPAs.length).toFixed(2) : "0.00"
 
-      
-      const highGPACount = filteredEducations.filter((edu) => {
-        const gpa = parseFloat((edu.gpa || "").replace(",", "."))
-        return !isNaN(gpa) && gpa > 3.5
-      }).length
+    const highGPACount = validGPAs.filter((gpa) => gpa > 3.5).length
 
     const accountsToUse = propFilteredAccounts || accounts
     const multipleDegreesCount = accountsToUse.filter(
@@ -962,7 +974,52 @@ export default function EducationAnalytics({
 
   return (
     <div className="space-y-6">
-    
+      {/* Filter Status and Clear Button */}
+      {(selectedLevel || selectedMajor || selectedInstitution) && (
+        <Card className="border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-semibold text-blue-800">Active Filters:</span>
+                {selectedLevel && (
+                  <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-200 transition-colors">
+                    <GraduationCap className="w-3 h-3 mr-1" />
+                    {selectedLevel}
+                  </Badge>
+                )}
+                {selectedMajor && (
+                  <Badge
+                    variant="secondary"
+                    className="bg-green-100 text-green-800 hover:bg-green-200 transition-colors"
+                  >
+                    <BookOpen className="w-3 h-3 mr-1" />
+                    {selectedMajor}
+                  </Badge>
+                )}
+                {selectedInstitution && (
+                  <Badge
+                    variant="secondary"
+                    className="bg-orange-100 text-orange-800 hover:bg-orange-200 transition-colors"
+                  >
+                    <Award className="w-3 h-3 mr-1" />
+                    {selectedInstitution.length > 20
+                      ? selectedInstitution.substring(0, 20) + "..."
+                      : selectedInstitution}
+                  </Badge>
+                )}
+              </div>
+              <Button
+                onClick={clearFilters}
+                variant="outline"
+                size="sm"
+                className="hover:bg-blue-100 transition-colors bg-transparent"
+              >
+                Clear All Filters
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -1036,7 +1093,7 @@ export default function EducationAnalytics({
       </div>
 
       {/* First Row - 3 Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Education Level Distribution */}
         <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-blue-50 border-blue-200">
           <CardHeader className="pb-3">
@@ -1079,14 +1136,8 @@ export default function EducationAnalytics({
           </CardContent>
         </Card>
 
-       
-      </div>
-
-      {/* Second Row - 3 Charts */}
-      
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-         {/* Graduation Year Distribution */}
-         <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-purple-50 border-purple-200">
+        {/* Graduation Year Distribution */}
+        <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-purple-50 border-purple-200">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
               <TrendingUp className="w-5 h-5 text-purple-600" />
@@ -1103,6 +1154,10 @@ export default function EducationAnalytics({
             />
           </CardContent>
         </Card>
+      </div>
+
+      {/* Second Row - 3 Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* GPA Distribution by Level 
         <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-indigo-50 border-indigo-200">
           <CardHeader className="pb-3">
@@ -1147,7 +1202,7 @@ export default function EducationAnalytics({
         </Card>
 
         {/* Multiple Degrees */}
-        {/* <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-red-50 border-red-200">
+        <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-red-50 border-red-200">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Users className="w-5 h-5 text-red-600" />
@@ -1165,7 +1220,7 @@ export default function EducationAnalytics({
               height={350}
             />
           </CardContent>
-        </Card> */}
+        </Card>
       </div>
 
       {/* Third Row - 3 Charts */}
