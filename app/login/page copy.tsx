@@ -2,7 +2,7 @@
 
 import { useState,useEffect } from "react";
 import { useRouter } from "next/navigation";
-import api from "@/lib/axios";
+import { api } from "@/lib/axios";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -26,7 +26,6 @@ export default function LoginPage() {
 
     try {
       // ambil csrf cookie dulu kalau pakai sanctum
-      console.log("test")
       await api.get("/sanctum/csrf-cookie", { withCredentials: true });
 
       // login ke backend

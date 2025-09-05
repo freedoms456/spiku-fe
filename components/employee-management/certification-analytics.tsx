@@ -18,6 +18,8 @@ import {
 } from "lucide-react"
 import { accounts, certifications } from "@/lib/employee-management-data"
 import dynamic from "next/dynamic"
+import PegawaiBelumSertifikasi from "./pegawaiBelumSertifikasi"
+
 import type { ApexOptions } from "apexcharts";
 
 const Chart = dynamic(() => import("react-apexcharts"), { ssr: false })
@@ -204,54 +206,65 @@ export default function AnalitikSertifikasi({
 
   // 2. Sertifikasi berdasarkan Penerbit
   const getCertificationsByIssuer = () => {
+    // Asumsi: kita memiliki data total pegawai dan data sertifikasi
+    const totalEmployees = propFilteredAccounts.length // Fungsi untuk mendapatkan total pegawai
     const filteredCerts = getFilteredAccounts
-    if (!filteredCerts || filteredCerts.length === 0) {
+    
+    if (!totalEmployees || totalEmployees === 0) {
       return {
-        series: [{ name: "Sertifikat Diterbitkan", data: [] }],
+        series: [
+          { name: "Sudah Tersertifikasi", data: [0] },
+          { name: "Belum Tersertifikasi", data: [0] }
+        ],
         options: {
-          chart: { type: "bar" as const, height: 350 },
-          xaxis: { categories: [] },
+          chart: { type: "bar" as const, height: 350, stacked: true },
+          xaxis: { categories: ["Pegawai"] },
           noData: { text: "Tidak ada data tersedia" },
         },
       }
     }
 
-    const issuerCounts = filteredCerts.reduce(
-      (acc, cert) => {
-        const issuer = cert.certification_penerbit || "Tidak Diketahui"
-        acc[issuer] = (acc[issuer] || 0) + 1
-        return acc
-      },
-      {} as Record<string, number>,
-    )
+    // Hitung pegawai unik yang sudah tersertifikasi
+    const certifiedEmployees = new Set()
+    if (filteredCerts && filteredCerts.length > 0) {
+      filteredCerts.forEach(cert => {
+        if (cert.account_id) {
+          certifiedEmployees.add(cert.account_id)
+        }
+      })
+    }
 
-    const sortedIssuers = Object.entries(issuerCounts)
-      .sort(([,a], [,b]) => b - a)
-      .slice(0, 8)
-
-    const categories = sortedIssuers.map(([issuer, _]) => issuer)
-    const data = sortedIssuers.map(([_, count]) => count)
+    const certifiedCount = certifiedEmployees.size
+    const uncertifiedCount = totalEmployees - certifiedCount
 
     return {
       series: [
         {
-          name: "Sertifikat Diterbitkan",
-          data,
+          name: "Sudah Tersertifikasi",
+          data: [certifiedCount],
         },
+        {
+          name: "Belum Tersertifikasi", 
+          data: [uncertifiedCount],
+        }
       ],
       options: {
         chart: {
           type: "bar" as const,
           height: 350,
+          stacked: true,
           toolbar: { show: false },
           events: {
             dataPointSelection: (event: any, chartContext: any, config: any) => {
-              if (config && config.dataPointIndex >= 0 && categories[config.dataPointIndex]) {
-                const issuer = categories[config.dataPointIndex]
-                const newIssuer = selectedIssuer === issuer ? null : issuer
-                setSelectedIssuer(newIssuer)
-                onFilterChange?.({ certType: selectedCertType, issuer: newIssuer, expired: selectedExpired })
-              }
+              // Handle click events jika diperlukan
+              const seriesIndex = config.seriesIndex
+              const status = seriesIndex === 0 ? 'certified' : 'uncertified'
+              onFilterChange?.({ 
+                certType: selectedCertType, 
+                issuer: selectedIssuer, 
+                expired: selectedExpired,
+                certificationStatus: status 
+              })
             },
           },
         },
@@ -259,7 +272,7 @@ export default function AnalitikSertifikasi({
           bar: {
             borderRadius: 6,
             horizontal: false,
-            columnWidth: "70%",
+            columnWidth: "50%",
           },
         },
         dataLabels: {
@@ -267,28 +280,30 @@ export default function AnalitikSertifikasi({
           style: {
             colors: ["#fff"],
             fontWeight: "bold",
-            fontSize: "12px",
+            fontSize: "14px",
           },
+          formatter: function(val: number) {
+            return val > 0 ? val.toString() : ''
+          }
         },
         xaxis: {
-          categories,
+          categories: ["Status Sertifikasi Pegawai"],
           labels: {
-            rotate: -45,
             style: {
-              fontSize: "10px",
-              fontWeight: "500",
+              fontSize: "12px",
+              fontWeight: "600",
             },
           },
         },
         yaxis: {
           title: {
-            text: "Jumlah Sertifikat",
+            text: "Jumlah Pegawai",
             style: { fontWeight: "600" },
           },
         },
-        colors: ["#10B981"],
+        colors: ["#10B981", "#EF4444"], // Hijau untuk tersertifikasi, merah untuk belum
         title: {
-          text: "Sertifikasi berdasarkan Penerbit",
+          text: "Status Sertifikasi Pegawai",
           align: "center" as const,
           style: {
             fontSize: "16px",
@@ -298,9 +313,15 @@ export default function AnalitikSertifikasi({
         },
         tooltip: {
           y: {
-            formatter: (val: number) => `${val} sertifikat`,
+            formatter: (val: number) => `${val} pegawai`,
           },
           theme: "light",
+        },
+        legend: {
+          position: "top",
+          horizontalAlign: "center",
+          fontSize: "12px",
+          fontWeight: "500",
         },
         grid: {
           borderColor: "#E5E7EB",
@@ -719,6 +740,8 @@ export default function AnalitikSertifikasi({
       }
     }
 
+ 
+
     const employeeActiveCerts = accountsToUse
       .map((account) => {
         const activeCertCount = (account.account_sertifikasi || []).filter(
@@ -804,6 +827,11 @@ export default function AnalitikSertifikasi({
         },
       },
     }
+  }
+
+
+  const getBelumSertifikasi = () => {
+      
   }
 
   // Statistik Ringkasan (dioptimalkan dengan memoization)
@@ -1085,7 +1113,7 @@ export default function AnalitikSertifikasi({
       </div>
 
       {/* Baris Ketiga - 1 Grafik */}
-      <div className="grid grid-cols-1 lg:grid-cols-1 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Top Pegawai dengan Sertifikat Aktif */}
         <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-cyan-50 border-cyan-200">
           <CardHeader className="pb-3">
@@ -1105,6 +1133,9 @@ export default function AnalitikSertifikasi({
               height={350}
             />
           </CardContent>
+        </Card>
+        <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-cyan-50 border-cyan-200">
+            <PegawaiBelumSertifikasi filteredAccounts={propFilteredAccounts} />
         </Card>
       </div>
 
