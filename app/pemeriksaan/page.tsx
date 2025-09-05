@@ -31,6 +31,7 @@ import {
   BarChart3
 } from "lucide-react"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
+import Navbar from "@/components/employee-management/navbar"
 
 export default function TeamFormationInsights() {
   const { user,logout} = useAuth({ redirectTo: "/login" });
@@ -432,6 +433,7 @@ export default function TeamFormationInsights() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+      <Navbar showSearchBar={false}/>
       <div className="max-w-7xl mx-auto p-6 space-y-8">
         {/* Header */}
         <div className="text-center space-y-4">

@@ -136,21 +136,66 @@ export default function MultiTableView({ globalSearchQuery = "" }: MultiTableVie
     return `${diff.years()} tahun ${diff.months()} bulan ${diff.days()} hari`;
   };
   // Calculate age from birth date
-  const calculateAge = (birthDate: string) => {
-    const today = new Date();
+  const calculateAge = (birthDate: string): number => {
+    try {
+      // Validasi input kosong atau null
+      if (!birthDate || typeof birthDate !== 'string') {
+        return 100;
+      }
   
-    // birthDate format: "DD/MM/YYYY"
-    const [day, month, year] = birthDate.split("/").map(Number);
-    const birth = new Date(year, month - 1, day); // bulan dikurangi 1 karena index dimulai 0
-  
-    let age = today.getFullYear() - birth.getFullYear();
-    const monthDiff = today.getMonth() - birth.getMonth();
-  
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-      age--;
+      const today = new Date();
+      
+      // birthDate format: "DD/MM/YYYY"
+      const dateParts = birthDate.split("/");
+      
+      // Validasi format tanggal (harus ada 3 bagian)
+      if (dateParts.length !== 3) {
+        return 100;
+      }
+      
+      const [day, month, year] = dateParts.map(Number);
+      
+      // Validasi angka valid
+      if (isNaN(day) || isNaN(month) || isNaN(year)) {
+        return 100;
+      }
+      
+      // Validasi rentang tanggal yang masuk akal
+      if (day < 1 || day > 31 || month < 1 || month > 12 || year < 1900 || year > today.getFullYear()) {
+        return 100;
+      }
+      
+      // bulan dikurangi 1 karena index dimulai 0
+      const birth = new Date(year, month - 1, day);
+      
+      // Validasi tanggal yang dibuat valid
+      if (isNaN(birth.getTime())) {
+        return 100;
+      }
+      
+      // Validasi tanggal lahir tidak di masa depan
+      if (birth > today) {
+        return 100;
+      }
+      
+      let age = today.getFullYear() - birth.getFullYear();
+      const monthDiff = today.getMonth() - birth.getMonth();
+      
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+        age--;
+      }
+      
+      // Validasi umur dalam rentang yang masuk akal
+      if (age < 0 || age > 150) {
+        return 100;
+      }
+      
+      return age;
+    } catch (error) {
+      // Jika ada error apapun, return 100
+      console.warn('Error calculating age:', error);
+      return 100;
     }
-  
-    return age;
   };
 
   const parseDMY = (str) => {
@@ -255,7 +300,9 @@ export default function MultiTableView({ globalSearchQuery = "" }: MultiTableVie
       // Apply age filter
       if (accountsFilters.age) {
         filtered = filtered.filter((acc) => {
+       
           const age = calculateAge(acc.account_tanggal_lahir)
+          // console.log(age)
           const ageRange = accountsFilters.age
 
           if (ageRange === "20-30") return age >= 20 && age <= 30
@@ -377,8 +424,8 @@ export default function MultiTableView({ globalSearchQuery = "" }: MultiTableVie
             const certs = Array.isArray(acc.account_sertifikasi) ? acc.account_sertifikasi : [];
             const matched = certs.filter((k: any) => {
               const active = isCertificateActive(k.masa_berlaku);
-              if (flag === "Active") return active;
-              if (flag === "Expired") return !active;
+              if (flag === "Aktif") return active;
+              if (flag === "Kadaluarsa") return !active;
               return true;
             });
             // kembalikan account dengan child yang sudah dipangkas
@@ -408,7 +455,7 @@ export default function MultiTableView({ globalSearchQuery = "" }: MultiTableVie
       
           const name = latestJabatan.name.toLowerCase()
       
-          let level = "Staff"
+          let level = "Staf"
           if (name.includes("kepal")) {
             level = "Struktural"
           } else if (["ahli", "pertama", "muda", "madya","terampil","pemeriksa"].some(k => name.includes(k))) {
@@ -554,7 +601,7 @@ export default function MultiTableView({ globalSearchQuery = "" }: MultiTableVie
       />
       {/* Main Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid grid-cols-3 lg:grid-cols-9 w-full">
+        <TabsList className="grid grid-cols-3 lg:grid-cols-8 w-full">
           <TabsTrigger value="accounts" className="text-xs">
             Pegawai
           </TabsTrigger>
@@ -579,10 +626,7 @@ export default function MultiTableView({ globalSearchQuery = "" }: MultiTableVie
           <TabsTrigger value="assistance" className="text-xs">
             Perbantuan
           </TabsTrigger>
-          <TabsTrigger value="audits" className="text-xs">
-            Pemeriksaan
-          </TabsTrigger>
-    
+
         </TabsList>
 
         {/* Accounts Tab */}
@@ -598,10 +642,10 @@ export default function MultiTableView({ globalSearchQuery = "" }: MultiTableVie
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Users className="w-5 h-5" />
-                Employee Accounts
+                Data Pegawai
                 {(Object.keys(accountsFilters).some((key) => accountsFilters[key]) || effectiveSearchTerm) && (
                   <Badge variant="secondary" className="ml-2">
-                    {getFilteredAccounts.length} filtered
+                    {getFilteredAccounts.length} Terfilter
                   </Badge>
                 )}
               </CardTitle>
@@ -613,13 +657,13 @@ export default function MultiTableView({ globalSearchQuery = "" }: MultiTableVie
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Gender</TableHead>
-                      <TableHead>Unit</TableHead>
-                      <TableHead>Position</TableHead>
-                      <TableHead>Rank</TableHead>
-                      <TableHead>Grade</TableHead>
-                      <TableHead>Actions</TableHead>
+                      <TableHead>Nama</TableHead>
+                      <TableHead>Jenis Kelamin</TableHead>
+                      <TableHead>Unit Kerja</TableHead>
+                      <TableHead>Jabatan</TableHead>
+                      <TableHead>Pangkat</TableHead>
+                      <TableHead>Golongan</TableHead>
+                      {/* <TableHead>Actions</TableHead> */}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -742,14 +786,14 @@ export default function MultiTableView({ globalSearchQuery = "" }: MultiTableVie
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <GraduationCap className="w-5 h-5" />
-                Education Records
+                Data Pendidikan
                 {(Object.keys(accountsFilters).some((key) => accountsFilters[key]) || effectiveSearchTerm) && (
                   <Badge variant="secondary" className="ml-2">
                      {getFilteredAccounts.length} filtered
                   </Badge>
                 )}
               </CardTitle>
-              <CardDescription>Employee educational background and qualifications</CardDescription>
+              <CardDescription>Latar Belakang Pendidikan Pegawai</CardDescription>
             </CardHeader>
             <CardContent>
               {renderTableControls()}
@@ -762,7 +806,7 @@ export default function MultiTableView({ globalSearchQuery = "" }: MultiTableVie
                       <TableHead>Institusi</TableHead>
                       <TableHead>Jurusan</TableHead>
                       <TableHead>Tahun Lulus</TableHead>
-                      <TableHead>IPK</TableHead>
+                      {/* <TableHead>IPK</TableHead> */}
                       {/* <TableHead>Actions</TableHead> */}
                     </TableRow>
                   </TableHeader>
@@ -784,9 +828,9 @@ export default function MultiTableView({ globalSearchQuery = "" }: MultiTableVie
                       </TableCell>
                       <TableCell className="text-blue-600">{education.jurusan}</TableCell>
                       <TableCell>{education.tahun_lulus}</TableCell>
-                      <TableCell>
+                      {/* <TableCell>
                         <Badge variant="outline">{education.gpa}</Badge>
-                      </TableCell>
+                      </TableCell> */}
                     </TableRow>
                   ))
                 ))}
@@ -807,14 +851,14 @@ export default function MultiTableView({ globalSearchQuery = "" }: MultiTableVie
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Award className="w-5 h-5" />
-                Training Records
+                Histori Diklat
                 {effectiveSearchTerm && (
                   <Badge variant="secondary" className="ml-2">
                     {getFilteredAccounts.length} filtered
                   </Badge>
                 )}
               </CardTitle>
-              <CardDescription>Employee training and development activities</CardDescription>
+              <CardDescription>Histori Aktifitas Diklat Pegawai</CardDescription>
             </CardHeader>
             <CardContent>
               {renderTableControls()}
@@ -868,7 +912,7 @@ export default function MultiTableView({ globalSearchQuery = "" }: MultiTableVie
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Certificate className="w-5 h-5" />
-                Certifications
+                Sertifikasi
                 {(Object.keys(accountsFilters).some((key) => accountsFilters[key]) ||
                   effectiveSearchTerm) && (
                   <Badge variant="secondary" className="ml-2">
@@ -876,7 +920,7 @@ export default function MultiTableView({ globalSearchQuery = "" }: MultiTableVie
                   </Badge>
                 )}
               </CardTitle>
-              <CardDescription>Professional certifications and licenses</CardDescription>
+              <CardDescription>Aktifitas Sertifikasi Pegawai</CardDescription>
             </CardHeader>
             <CardContent>
               {renderTableControls()}
@@ -946,14 +990,14 @@ export default function MultiTableView({ globalSearchQuery = "" }: MultiTableVie
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Briefcase className="w-5 h-5" />
-                Position History
+                Histori Jabatan
                 {effectiveSearchTerm && (
                   <Badge variant="secondary" className="ml-2">
                     {getFilteredAccounts.length} filtered
                   </Badge>
                 )}
               </CardTitle>
-              <CardDescription>Employee position and role changes over time</CardDescription>
+              <CardDescription>Histori Jabatan Pegawai</CardDescription>
             </CardHeader>
             <CardContent>
               {renderTableControls()}

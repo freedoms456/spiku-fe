@@ -28,7 +28,7 @@ interface CertificationAnalyticsProps {
   onFilterChange?: (filters: any) => void
 }
 
-export default function CertificationAnalytics({
+export default function AnalitikSertifikasi({
   filteredAccounts: propFilteredAccounts,
   onFilterChange,
 }: CertificationAnalyticsProps = {}) {
@@ -36,71 +36,82 @@ export default function CertificationAnalytics({
   const [selectedIssuer, setSelectedIssuer] = useState<string | null>(null)
   const [selectedExpired, setSelectedExpired] = useState<string | null>(null)
 
-  // Get filtered certifications based on selections
-  
+  // Mendapatkan sertifikasi yang telah difilter berdasarkan pilihan (dioptimalkan dengan memoization)
   const getFilteredAccounts = useMemo(() => {
+    if (!propFilteredAccounts || propFilteredAccounts.length === 0) {
+      return []
+    }
     
-    let filtered = propFilteredAccounts
-    
-    const sertifikasiList = filtered.flatMap((account) =>
-    (account.account_sertifikasi || []).map((sertifikasi) => ({
-      ...sertifikasi,
-      account_name: account.account_name, // ikut sertakan nama account
-    }))
-  )
+    // Flatten semua sertifikasi dari akun yang difilter
+    const sertifikasiList = propFilteredAccounts.flatMap((account) =>
+      (account.account_sertifikasi || []).map((sertifikasi) => ({
+        ...sertifikasi,
+        account_name: account.account_name || "Tidak Diketahui",
+        account_id: account.id,
+      }))
+    )
 
     return sertifikasiList
-  
   }, [propFilteredAccounts, selectedExpired, selectedIssuer, selectedCertType])
-  
 
-
-  // Helper function to check if certificate is active
-  const isCertificateActive = (expiryDate: string): boolean => {
-    if (!expiryDate) return true; // kosong dianggap Active
-  
-    // pecah string "dd-mm-yyyy"
-    const [day, month, year] = expiryDate.split("-");
-    if (!day || !month || !year) return true; // kalau formatnya salah, anggap Active
-  
-    // konversi ke format yyyy-mm-dd agar valid untuk Date()
-    const parsedDate = new Date(`${year}-${month}-${day}T00:00:00`);
-  
-    return parsedDate > new Date();
-  };
-
-  // Helper function to get months until expiry
-  const getMonthsUntilExpiry = (expiryDate: string) => {
-    if (!expiryDate) return -1
-  
-    // Parse format dd-mm-yyyy
-    const [day, month, year] = expiryDate.split("-").map(Number)
-    const expiry = new Date(year, month - 1, day) // month - 1 karena JS mulai dari 0
+  // Helper function untuk cek status sertifikat aktif (dioptimalkan)
+  const isCertificateActive = useMemo(() => {
+    const activeStatusCache = new Map<string, boolean>()
     
-    const now = new Date()
-    const diffTime = expiry.getTime() - now.getTime()
-    const diffMonths = Math.ceil(diffTime / (1000 * 60 * 60 * 24 * 30))
-  
-    return diffMonths
+    return (expiryDate: string): boolean => {
+      if (!expiryDate) return true
+      
+      if (activeStatusCache.has(expiryDate)) {
+        return activeStatusCache.get(expiryDate)!
+      }
+      
+      try {
+        const [day, month, year] = expiryDate.split("-").map(Number)
+        if (!day || !month || !year) return true
+        
+        const parsedDate = new Date(year, month - 1, day)
+        const isActive = parsedDate > new Date()
+        
+        activeStatusCache.set(expiryDate, isActive)
+        return isActive
+      } catch {
+        return true
+      }
+    }
+  }, [])
+
+  // Helper function untuk mendapatkan bulan hingga expired (dioptimalkan)
+  const getMonthsUntilExpiry = (expiryDate: string): number => {
+    if (!expiryDate) return -1
+    
+    try {
+      const [day, month, year] = expiryDate.split("-").map(Number)
+      const expiry = new Date(year, month - 1, day)
+      const now = new Date()
+      const diffTime = expiry.getTime() - now.getTime()
+      return Math.ceil(diffTime / (1000 * 60 * 60 * 24 * 30))
+    } catch {
+      return -1
+    }
   }
 
-  // 1. Certifications by Type Chart
+  // 1. Sertifikasi berdasarkan Jenis
   const getCertificationsByType = () => {
     const filteredCerts = getFilteredAccounts
     if (!filteredCerts || filteredCerts.length === 0) {
       return {
-        series: [{ name: "Certifications", data: [] }],
+        series: [{ name: "Sertifikasi", data: [] }],
         options: {
           chart: { type: "bar" as const, height: 350 },
           xaxis: { categories: [] },
-          noData: { text: "No data available" },
+          noData: { text: "Tidak ada data tersedia" },
         },
       }
     }
 
     const typeCounts = filteredCerts.reduce(
       (acc, cert) => {
-        const type = cert.name || "Unknown"
+        const type = cert.name || "Tidak Diketahui"
         acc[type] = (acc[type] || 0) + 1
         return acc
       },
@@ -108,9 +119,8 @@ export default function CertificationAnalytics({
     )
 
     const sortedTypes = Object.entries(typeCounts)
-      .map(([k, v]) => [k, Number(v)] as [string, number])
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10);
+      .sort(([,a], [,b]) => b - a)
+      .slice(0, 10)
 
     const categories = sortedTypes.map(([type, _]) => (type.length > 25 ? type.substring(0, 25) + "..." : type))
     const data = sortedTypes.map(([_, count]) => count)
@@ -118,7 +128,7 @@ export default function CertificationAnalytics({
     return {
       series: [
         {
-          name: "Certifications",
+          name: "Sertifikasi",
           data,
         },
       ],
@@ -164,13 +174,13 @@ export default function CertificationAnalytics({
         },
         yaxis: {
           title: {
-            text: "Certificate Types",
+            text: "Jenis Sertifikat",
             style: { fontWeight: "600" },
           },
         },
         colors: ["#3B82F6"],
         title: {
-          text: "Certifications by Type",
+          text: "Sertifikasi berdasarkan Jenis",
           align: "center" as const,
           style: {
             fontSize: "16px",
@@ -180,7 +190,7 @@ export default function CertificationAnalytics({
         },
         tooltip: {
           y: {
-            formatter: (val: number) => `${val} certificates`,
+            formatter: (val: number) => `${val} sertifikat`,
           },
           theme: "light",
         },
@@ -192,33 +202,32 @@ export default function CertificationAnalytics({
     }
   }
 
-  // 2. Certifications by Issuer Chart
+  // 2. Sertifikasi berdasarkan Penerbit
   const getCertificationsByIssuer = () => {
     const filteredCerts = getFilteredAccounts
     if (!filteredCerts || filteredCerts.length === 0) {
       return {
-        series: [{ name: "Certificates Issued", data: [] }],
+        series: [{ name: "Sertifikat Diterbitkan", data: [] }],
         options: {
           chart: { type: "bar" as const, height: 350 },
           xaxis: { categories: [] },
-          noData: { text: "No data available" },
+          noData: { text: "Tidak ada data tersedia" },
         },
       }
     }
 
     const issuerCounts = filteredCerts.reduce(
       (acc, cert) => {
-        const issuer = cert.certification_penerbit || "Unknown"
+        const issuer = cert.certification_penerbit || "Tidak Diketahui"
         acc[issuer] = (acc[issuer] || 0) + 1
         return acc
       },
       {} as Record<string, number>,
     )
 
-const sortedIssuers = Object.entries(issuerCounts)
-  .map(([k, v]) => [k, Number(v)] as [string, number])
-  .sort((a, b) => b[1] - a[1])
-  .slice(0, 8);
+    const sortedIssuers = Object.entries(issuerCounts)
+      .sort(([,a], [,b]) => b - a)
+      .slice(0, 8)
 
     const categories = sortedIssuers.map(([issuer, _]) => issuer)
     const data = sortedIssuers.map(([_, count]) => count)
@@ -226,7 +235,7 @@ const sortedIssuers = Object.entries(issuerCounts)
     return {
       series: [
         {
-          name: "Certificates Issued",
+          name: "Sertifikat Diterbitkan",
           data,
         },
       ],
@@ -273,13 +282,13 @@ const sortedIssuers = Object.entries(issuerCounts)
         },
         yaxis: {
           title: {
-            text: "Number of Certificates",
+            text: "Jumlah Sertifikat",
             style: { fontWeight: "600" },
           },
         },
         colors: ["#10B981"],
         title: {
-          text: "Certifications by Issuer",
+          text: "Sertifikasi berdasarkan Penerbit",
           align: "center" as const,
           style: {
             fontSize: "16px",
@@ -289,7 +298,7 @@ const sortedIssuers = Object.entries(issuerCounts)
         },
         tooltip: {
           y: {
-            formatter: (val: number) => `${val} certificates`,
+            formatter: (val: number) => `${val} sertifikat`,
           },
           theme: "light",
         },
@@ -301,18 +310,16 @@ const sortedIssuers = Object.entries(issuerCounts)
     }
   }
 
-  // 3. Active vs Expired Certificates Chart
+  // 3. Status Aktif vs Kadaluarsa
   const getActiveVsExpiredChart = () => {
     const filteredCerts = getFilteredAccounts
     if (!filteredCerts || filteredCerts.length === 0) {
       return {
         series: [],
         options: {
-          chart: { type: "pie" as const, height: 350 , 
-         
-          },
+          chart: { type: "pie" as const, height: 350 },
           labels: [],
-          noData: { text: "No data available" },
+          noData: { text: "Tidak ada data tersedia" },
         },
       }
     }
@@ -334,27 +341,22 @@ const sortedIssuers = Object.entries(issuerCounts)
             ) => {
               const idx = config?.dataPointIndex;
               if (typeof idx === "number" && idx >= 0) {
-                // ambil label sesuai slice yang di-klik
-                const label = ["Active", "Expired"][idx];
-    
-                // toggle (klik lagi = batal)
+                const label = ["Aktif", "Kadaluarsa"][idx];
                 const newStatus = selectedExpired === label ? null : label;
-    
                 setSelectedExpired(newStatus);
-    
                 onFilterChange?.({
                   certType: selectedCertType,
                   issuer: selectedIssuer,
-                  expired: newStatus, // kirim Active / Expired / null
+                  expired: newStatus,
                 });
               }
             }
           },
         },
-        labels: ["Active", "Expired"],
+        labels: ["Aktif", "Kadaluarsa"],
         colors: ["#10B981", "#EF4444"],
         title: {
-          text: "Active vs Expired Certificates",
+          text: "Status Sertifikat Aktif vs Kadaluarsa",
           align: "center" as const,
           style: {
             fontSize: "16px",
@@ -369,7 +371,7 @@ const sortedIssuers = Object.entries(issuerCounts)
         },
         tooltip: {
           y: {
-            formatter: (val: number) => `${val} certificates`,
+            formatter: (val: number) => `${val} sertifikat`,
           },
           theme: "light",
         },
@@ -409,40 +411,42 @@ const sortedIssuers = Object.entries(issuerCounts)
     }
   }
 
-  // 4. Certificates Issued by Year Timeline
+  // 4. Timeline Penerbitan Sertifikat berdasarkan Tahun
   const getCertificatesByYearTimeline = () => {
     const filteredCerts = getFilteredAccounts
     if (!filteredCerts || filteredCerts.length === 0) {
       return {
-        series: [{ name: "Certificates Issued", data: [] }],
+        series: [{ name: "Sertifikat Diterbitkan", data: [] }],
         options: {
           chart: { type: "line" as const, height: 350 },
           xaxis: { categories: [] },
-          noData: { text: "No data available" },
+          noData: { text: "Tidak ada data tersedia" },
         },
       }
     }
 
     const yearCounts = filteredCerts.reduce((acc, cert) => {
       if (cert.tanggal_sertifikasi) {
-        const [day, month, year] = cert.tanggal_sertifikasi.split("-").map(Number)
-        if (!day || !month || !year) return acc; // skip invalid
-        acc[year.toString()] = (acc[year.toString()] || 0) + 1
+        try {
+          const [day, month, year] = cert.tanggal_sertifikasi.split("-").map(Number)
+          if (day && month && year && year > 1900 && year <= new Date().getFullYear()) {
+            acc[year.toString()] = (acc[year.toString()] || 0) + 1
+          }
+        } catch {
+          // Skip invalid dates
+        }
       }
       return acc
     }, {} as Record<string, number>)
 
-    const sortedYears = Object.entries(yearCounts).sort((a, b) => a[0].localeCompare(b[0]))
+    const sortedYears = Object.entries(yearCounts).sort(([a], [b]) => a.localeCompare(b))
     const categories = sortedYears.map(([year, _]) => year)
     const data = sortedYears.map(([_, count]) => count)
-
-    console.log(sortedYears)
-    console.log(data)
 
     return {
       series: [
         {
-          name: "Certificates Issued",
+          name: "Sertifikat Diterbitkan",
           data,
         },
       ],
@@ -471,13 +475,13 @@ const sortedIssuers = Object.entries(issuerCounts)
         },
         yaxis: {
           title: {
-            text: "Number of Certificates",
+            text: "Jumlah Sertifikat",
             style: { fontWeight: "600" },
           },
         },
         colors: ["#8B5CF6"],
         title: {
-          text: "Certificate Issuance Timeline",
+          text: "Timeline Penerbitan Sertifikat",
           align: "center" as const,
           style: {
             fontSize: "16px",
@@ -487,7 +491,7 @@ const sortedIssuers = Object.entries(issuerCounts)
         },
         tooltip: {
           y: {
-            formatter: (val: number) => `${val} certificates`,
+            formatter: (val: number) => `${val} sertifikat`,
           },
           theme: "light",
         },
@@ -499,30 +503,25 @@ const sortedIssuers = Object.entries(issuerCounts)
     }
   }
 
-  // 5. Certificates per Employee Chart
+  // 5. Sertifikat per Pegawai (dioptimalkan)
   const getCertificatesPerEmployee = () => {
-    const accountsToUse = propFilteredAccounts || accounts
+    const accountsToUse = propFilteredAccounts || []
     if (!accountsToUse || accountsToUse.length === 0) {
       return {
-        series: [{ name: "Certificates", data: [] }],
+        series: [{ name: "Sertifikat", data: [] }],
         options: {
           chart: { type: "bar" as const, height: 350 },
           xaxis: { categories: [] },
-          noData: { text: "No data available" },
+          noData: { text: "Tidak ada data tersedia" },
         },
       }
     }
 
     const employeeCertCounts = accountsToUse
-      .map((account) => {
-        const certCount = (getFilteredAccounts || certifications).filter(
-          (cert) => cert.account_id === account.id,
-        ).length
-        return {
-          name: account.account_name || "Unknown",
-          count: certCount,
-        }
-      })
+      .map((account) => ({
+        name: account.account_name || "Tidak Diketahui",
+        count: account.account_sertifikasi?.length || 0,
+      }))
       .filter((emp) => emp.count > 0)
       .sort((a, b) => b.count - a.count)
       .slice(0, 10)
@@ -535,7 +534,7 @@ const sortedIssuers = Object.entries(issuerCounts)
     return {
       series: [
         {
-          name: "Certificates",
+          name: "Sertifikat",
           data,
         },
       ],
@@ -544,7 +543,6 @@ const sortedIssuers = Object.entries(issuerCounts)
           type: "bar" as const,
           height: 350,
           toolbar: { show: false },
-         
         },
         plotOptions: {
           bar: {
@@ -573,13 +571,13 @@ const sortedIssuers = Object.entries(issuerCounts)
         },
         yaxis: {
           title: {
-            text: "Number of Certificates",
+            text: "Jumlah Sertifikat",
             style: { fontWeight: "600" },
           },
         },
         colors: ["#F59E0B"],
         title: {
-          text: "Certificates per Employee (Top 10)",
+          text: "Sertifikat per Pegawai (10 Teratas)",
           align: "center" as const,
           style: {
             fontSize: "16px",
@@ -589,7 +587,7 @@ const sortedIssuers = Object.entries(issuerCounts)
         },
         tooltip: {
           y: {
-            formatter: (val: number) => `${val} certificates`,
+            formatter: (val: number) => `${val} sertifikat`,
           },
           theme: "light",
         },
@@ -601,7 +599,7 @@ const sortedIssuers = Object.entries(issuerCounts)
     }
   }
 
-  // 6. Certificates Expiring Soon Chart
+  // 6. Sertifikat yang Akan Segera Berakhir (dioptimalkan)
   const getCertificatesExpiringSoon = (): {
     series: ApexAxisChartSeries;
     options: ApexOptions;
@@ -610,37 +608,38 @@ const sortedIssuers = Object.entries(issuerCounts)
   
     if (!certsToUse || certsToUse.length === 0) {
       return {
-        series: [{ name: "Expiring Certificates", data: [] }],
+        series: [{ name: "Sertifikat Berakhir", data: [] }],
         options: {
           chart: { type: "bar", height: 350 },
           xaxis: { categories: [] },
-          noData: { text: "No data available" },
+          noData: { text: "Tidak ada data tersedia" },
         },
       };
     }
-    // flatten sertifikasi dari accounts
-    const allCerts = getFilteredAccounts
     
-    // ambil bulan dari masa_berlaku (format dd-mm-yyyy)
     const countsByMonth: Record<string, number> = {};
-  
-    allCerts.forEach((cert: any) => {
-      if (cert.masa_berlaku) {
-        const [day, month, year] = cert.masa_berlaku.split("-").map(Number);
-        const expiryDate = new Date(year, month - 1, day);
+    const currentYear = new Date().getFullYear();
 
-        if (expiryDate > new Date() && expiryDate.getFullYear() === new Date().getFullYear()) {
-          const monthName = expiryDate.toLocaleString("default", { month: "short" });
-          countsByMonth[monthName] = (countsByMonth[monthName] || 0) + 1;
+    certsToUse.forEach((cert: any) => {
+      if (cert.masa_berlaku) {
+        try {
+          const [day, month, year] = cert.masa_berlaku.split("-").map(Number);
+          const expiryDate = new Date(year, month - 1, day);
+
+          if (expiryDate > new Date() && expiryDate.getFullYear() === currentYear) {
+            const monthName = expiryDate.toLocaleString("id-ID", { month: "short" });
+            countsByMonth[monthName] = (countsByMonth[monthName] || 0) + 1;
+          }
+        } catch {
+          // Skip invalid dates
         }
-        // console.log(cert.masa_berlaku)
       }
     });
     
 
-    // urutkan sesuai bulan kalender
+    // Urutkan sesuai bulan kalender (Indonesia)
     const months = [
-      "Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"
+      "Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"
     ];
     const categories: string[] = [];
     const data: number[] = [];
@@ -653,37 +652,81 @@ const sortedIssuers = Object.entries(issuerCounts)
     });
     
     return {
-      series: [{ name: "Expiring Certificates", data }],
+      series: [{ name: "Sertifikat Berakhir", data }],
       options: {
-        chart: { type: "bar", height: 350 },
-        xaxis: { categories },
+        chart: { 
+          type: "bar", 
+          height: 350,
+          toolbar: { show: false }
+        },
+        plotOptions: {
+          bar: {
+            borderRadius: 6,
+            columnWidth: "60%",
+          },
+        },
+        xaxis: { 
+          categories,
+          labels: {
+            style: {
+              fontSize: "11px",
+              fontWeight: "500",
+            },
+          },
+        },
+        yaxis: {
+          title: {
+            text: "Jumlah Sertifikat",
+            style: { fontWeight: "600" },
+          },
+        },
+        colors: ["#EF4444"],
+        title: {
+          text: "Sertifikat yang Berakhir Tahun Ini",
+          align: "center" as const,
+          style: {
+            fontSize: "16px",
+            fontWeight: "bold",
+            color: "#1F2937",
+          },
+        },
+        tooltip: {
+          y: {
+            formatter: (val: number) => `${val} sertifikat berakhir`,
+          },
+          theme: "light",
+        },
+        grid: {
+          borderColor: "#E5E7EB",
+          strokeDashArray: 3,
+        },
       },
     };
   };
 
-  // 7. Top Employees with Most Active Certifications
+  // 7. Top Pegawai dengan Sertifikat Aktif Terbanyak (dioptimalkan)
   const getTopEmployeesActiveChart = () => {
-    const accountsToUse = propFilteredAccounts || accounts
-    const certsToUse = getFilteredAccounts || certifications
-
+    const accountsToUse = propFilteredAccounts || []
+    
     if (!accountsToUse || accountsToUse.length === 0) {
       return {
-        series: [{ name: "Active Certificates", data: [] }],
+        series: [{ name: "Sertifikat Aktif", data: [] }],
         options: {
           chart: { type: "bar" as const, height: 350 },
           xaxis: { categories: [] },
-          noData: { text: "No data available" },
+          noData: { text: "Tidak ada data tersedia" },
         },
       }
     }
 
     const employeeActiveCerts = accountsToUse
       .map((account) => {
-        const activeCertCount = certsToUse.filter(
-          (cert) => cert.account_id === account.id && isCertificateActive(cert.certification_tanggal_berakhir),
+        const activeCertCount = (account.account_sertifikasi || []).filter(
+          (cert: any) => isCertificateActive(cert.masa_berlaku)
         ).length
+        
         return {
-          name: account.account_name || "Unknown",
+          name: account.account_name || "Tidak Diketahui",
           count: activeCertCount,
         }
       })
@@ -699,7 +742,7 @@ const sortedIssuers = Object.entries(issuerCounts)
     return {
       series: [
         {
-          name: "Active Certificates",
+          name: "Sertifikat Aktif",
           data,
         },
       ],
@@ -735,13 +778,13 @@ const sortedIssuers = Object.entries(issuerCounts)
         },
         yaxis: {
           title: {
-            text: "Employees",
+            text: "Pegawai",
             style: { fontWeight: "600" },
           },
         },
         colors: ["#06B6D4"],
         title: {
-          text: "Top Employees with Most Active Certifications",
+          text: "Pegawai Teratas dengan Sertifikat Aktif Terbanyak",
           align: "center" as const,
           style: {
             fontSize: "16px",
@@ -751,7 +794,7 @@ const sortedIssuers = Object.entries(issuerCounts)
         },
         tooltip: {
           y: {
-            formatter: (val: number) => `${val} active certificates`,
+            formatter: (val: number) => `${val} sertifikat aktif`,
           },
           theme: "light",
         },
@@ -763,8 +806,8 @@ const sortedIssuers = Object.entries(issuerCounts)
     }
   }
 
-  // Summary Statistics
-  const getSummaryStats = () => {
+  // Statistik Ringkasan (dioptimalkan dengan memoization)
+  const getSummaryStats = useMemo(() => {
     const filteredCerts = getFilteredAccounts
     if (!filteredCerts || filteredCerts.length === 0) {
       return {
@@ -777,39 +820,25 @@ const sortedIssuers = Object.entries(issuerCounts)
       }
     }
 
-   // flatten semua sertifikasi dari accounts yang sudah difilter
-        const allCerts = filteredCerts.flatMap((acc: any) => acc.name || [])
+    const totalCertifications = filteredCerts.length
+    const activeCertifications = filteredCerts.filter((cert) => 
+      isCertificateActive(cert.masa_berlaku)
+    ).length
+    const expiredCertifications = totalCertifications - activeCertifications
+    
+    const expiringSoon = filteredCerts.filter((cert) => {
+      const monthsUntil = getMonthsUntilExpiry(cert.masa_berlaku)
+      return monthsUntil > 0 && monthsUntil <= 6
+    }).length
 
-        const totalCertifications = allCerts.length
+    // Menggunakan Set untuk efisiensi
+    const uniqueIssuers = new Set(
+      filteredCerts.map(cert => cert.certification_penerbit).filter(Boolean)
+    ).size
 
-        const activeCertifications = allCerts.filter((cert: any) =>
-          isCertificateActive(cert.masa_berlaku)
-        ).length
-
-        const expiredCertifications = totalCertifications - activeCertifications
-        const expiringSoon = filteredCerts.filter((cert: any) => {
-          const monthsUntil = getMonthsUntilExpiry(cert.masa_berlaku)
-          return monthsUntil > 0 && monthsUntil <= 6
-        }).length
-
-
-        const certsByAccount: Record<string, Set<string>> = {};
-
-        filteredCerts.forEach((cert) => {
-          if (cert.account_name && cert.name) {
-            if (!certsByAccount[cert.account_name]) {
-              certsByAccount[cert.account_name] = new Set();
-            }
-            certsByAccount[cert.account_name].add(cert.name);
-          }
-        });
-        
-        // Hitung orang yang punya lebih dari 2 sertifikat unik
-        const uniqueTypes = Object.values(certsByAccount).filter(
-          (certSet) => certSet.size > 2
-        ).length;
-
-        const uniqueIssuers = 0
+    const uniqueTypes = new Set(
+      filteredCerts.map(cert => cert.name).filter(Boolean)
+    ).size
 
     return {
       totalCertifications,
@@ -819,9 +848,9 @@ const sortedIssuers = Object.entries(issuerCounts)
       uniqueIssuers,
       uniqueTypes,
     }
-  }
+  }, [getFilteredAccounts, isCertificateActive])
 
-  const stats = getSummaryStats()
+  const stats = getSummaryStats
 
   const clearFilters = () => {
     setSelectedCertType(null)
@@ -832,17 +861,15 @@ const sortedIssuers = Object.entries(issuerCounts)
 
   return (
     <div className="space-y-6">
-
-
-      {/* Summary Cards */}
+      {/* Kartu Ringkasan */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
         <Card className="hover:shadow-lg transition-all duration-300 hover:scale-105 bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-blue-700">Total Certificates</p>
+                <p className="text-sm font-medium text-blue-700">Total Sertifikat</p>
                 <p className="text-2xl font-bold text-blue-600">{stats.totalCertifications}</p>
-                <p className="text-xs text-blue-600 mt-1">All records</p>
+                <p className="text-xs text-blue-600 mt-1">Semua rekord</p>
               </div>
               <Certificate className="w-8 h-8 text-blue-600" />
             </div>
@@ -853,13 +880,13 @@ const sortedIssuers = Object.entries(issuerCounts)
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-green-700">Active</p>
+                <p className="text-sm font-medium text-green-700">Aktif</p>
                 <p className="text-2xl font-bold text-green-600">{stats.activeCertifications}</p>
                 <p className="text-xs text-green-600 mt-1">
                   {stats.totalCertifications > 0
                     ? ((stats.activeCertifications / stats.totalCertifications) * 100).toFixed(1)
                     : 0}
-                  % of total
+                  % dari total
                 </p>
               </div>
               <CheckCircle className="w-8 h-8 text-green-600" />
@@ -871,13 +898,13 @@ const sortedIssuers = Object.entries(issuerCounts)
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-red-700">Expired</p>
+                <p className="text-sm font-medium text-red-700">Kadaluarsa</p>
                 <p className="text-2xl font-bold text-red-600">{stats.expiredCertifications}</p>
                 <p className="text-xs text-red-600 mt-1">
                   {stats.totalCertifications > 0
                     ? ((stats.expiredCertifications / stats.totalCertifications) * 100).toFixed(1)
                     : 0}
-                  % of total
+                  % dari total
                 </p>
               </div>
               <XCircle className="w-8 h-8 text-red-600" />
@@ -889,9 +916,9 @@ const sortedIssuers = Object.entries(issuerCounts)
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-orange-700">Expiring Soon</p>
+                <p className="text-sm font-medium text-orange-700">Segera Berakhir</p>
                 <p className="text-2xl font-bold text-orange-600">{stats.expiringSoon}</p>
-                <p className="text-xs text-orange-600 mt-1">Next 6 months</p>
+                <p className="text-xs text-orange-600 mt-1">6 bulan ke depan</p>
               </div>
               <Clock className="w-8 h-8 text-orange-600" />
             </div>
@@ -902,9 +929,9 @@ const sortedIssuers = Object.entries(issuerCounts)
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-purple-700">Issuers</p>
+                <p className="text-sm font-medium text-purple-700">Penerbit</p>
                 <p className="text-2xl font-bold text-purple-600">{stats.uniqueIssuers}</p>
-                <p className="text-xs text-purple-600 mt-1">Organizations</p>
+                <p className="text-xs text-purple-600 mt-1">Organisasi</p>
               </div>
               <Award className="w-8 h-8 text-purple-600" />
             </div>
@@ -915,9 +942,9 @@ const sortedIssuers = Object.entries(issuerCounts)
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-pink-700">Certificate Types</p>
+                <p className="text-sm font-medium text-pink-700">Jenis Sertifikat</p>
                 <p className="text-2xl font-bold text-pink-600">{stats.uniqueTypes}</p>
-                <p className="text-xs text-pink-600 mt-1">Different types</p>
+                <p className="text-xs text-pink-600 mt-1">Jenis berbeda</p>
               </div>
               <Target className="w-8 h-8 text-pink-600" />
             </div>
@@ -925,17 +952,17 @@ const sortedIssuers = Object.entries(issuerCounts)
         </Card>
       </div>
 
-      {/* First Row - 3 Charts */}
+      {/* Baris Pertama - 3 Grafik */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Certifications by Type */}
+        {/* Sertifikasi berdasarkan Jenis */}
         <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-blue-50 border-blue-200">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Certificate className="w-5 h-5 text-blue-600" />
-              Certifications by Type
+              Sertifikasi berdasarkan Jenis
             </CardTitle>
             <CardDescription className="text-sm">
-              Click bars to filter by certificate type. Shows top 10 most common certifications.
+              Klik batang untuk filter berdasarkan jenis sertifikat. Menampilkan 10 sertifikasi paling umum.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -948,15 +975,15 @@ const sortedIssuers = Object.entries(issuerCounts)
           </CardContent>
         </Card>
 
-        {/* Certifications by Issuer */}
+        {/* Sertifikasi berdasarkan Penerbit */}
         <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-green-50 border-green-200">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Award className="w-5 h-5 text-green-600" />
-              Certifications by Issuer
+              Sertifikasi berdasarkan Penerbit
             </CardTitle>
             <CardDescription className="text-sm">
-              Click bars to filter by issuing organization. Shows top 8 certificate providers.
+              Klik batang untuk filter berdasarkan organisasi penerbit. Menampilkan 8 penyedia sertifikat teratas.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -969,15 +996,15 @@ const sortedIssuers = Object.entries(issuerCounts)
           </CardContent>
         </Card>
 
-        {/* Active vs Expired */}
+        {/* Status Aktif vs Kadaluarsa */}
         <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-red-50 border-red-200">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Activity className="w-5 h-5 text-red-600" />
-              Active vs Expired Status
+              Status Aktif vs Kadaluarsa
             </CardTitle>
             <CardDescription className="text-sm">
-              Current status distribution of all certificates in the system.
+              Distribusi status sertifikat saat ini dalam sistem.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -991,17 +1018,17 @@ const sortedIssuers = Object.entries(issuerCounts)
         </Card>
       </div>
 
-      {/* Second Row - 3 Charts */}
+      {/* Baris Kedua - 3 Grafik */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Certificate Issuance Timeline */}
+        {/* Timeline Penerbitan Sertifikat */}
         <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-purple-50 border-purple-200">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Calendar className="w-5 h-5 text-purple-600" />
-              Certificate Issuance Timeline
+              Timeline Penerbitan Sertifikat
             </CardTitle>
             <CardDescription className="text-sm">
-              Timeline showing certificate issuance patterns over the years.
+              Timeline menunjukkan pola penerbitan sertifikat sepanjang tahun.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -1014,15 +1041,15 @@ const sortedIssuers = Object.entries(issuerCounts)
           </CardContent>
         </Card>
 
-        {/* Certificates per Employee */}
+        {/* Sertifikat per Pegawai */}
         <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-orange-50 border-orange-200">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Users className="w-5 h-5 text-orange-600" />
-              Certificates per Employee
+              Sertifikat per Pegawai
             </CardTitle>
             <CardDescription className="text-sm">
-              Click bars to filter by employee. Shows top 10 employees with most certificates.
+              Klik batang untuk filter berdasarkan pegawai. Menampilkan 10 pegawai dengan sertifikat terbanyak.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -1035,15 +1062,15 @@ const sortedIssuers = Object.entries(issuerCounts)
           </CardContent>
         </Card>
 
-        {/* Certificates Expiring Soon */}
+        {/* Sertifikat yang Segera Berakhir */}
         <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-red-50 border-red-200">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
               <AlertTriangle className="w-5 h-5 text-red-600" />
-              Certificates Expiring Soon
+              Sertifikat yang Segera Berakhir
             </CardTitle>
             <CardDescription className="text-sm">
-              Certificates expiring within the next 6 months - renewal planning required.
+              Sertifikat yang berakhir dalam 6 bulan ke depan - perlu perencanaan perpanjangan.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -1057,17 +1084,17 @@ const sortedIssuers = Object.entries(issuerCounts)
         </Card>
       </div>
 
-      {/* Third Row - 1 Chart */}
+      {/* Baris Ketiga - 1 Grafik */}
       <div className="grid grid-cols-1 lg:grid-cols-1 gap-6">
-        {/* Top Employees with Active Certifications */}
+        {/* Top Pegawai dengan Sertifikat Aktif */}
         <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-cyan-50 border-cyan-200">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
               <CheckCircle className="w-5 h-5 text-cyan-600" />
-              Top Employees with Most Active Certifications
+              Pegawai Teratas dengan Sertifikat Aktif Terbanyak
             </CardTitle>
             <CardDescription className="text-sm">
-              Employees with the most active (non-expired) certifications.
+              Pegawai dengan sertifikat aktif (belum kadaluarsa) terbanyak.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -1081,49 +1108,49 @@ const sortedIssuers = Object.entries(issuerCounts)
         </Card>
       </div>
 
-      {/* Insights Panel */}
+      {/* Panel Wawasan */}
       <Card className="bg-gradient-to-r from-blue-50 via-purple-50 to-pink-50 border-blue-200 hover:shadow-xl transition-all duration-300">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <AlertTriangle className="w-5 h-5 text-amber-600" />
-            Certification Insights & Recommendations
+            Wawasan & Rekomendasi Sertifikasi
           </CardTitle>
-          <CardDescription>Data-driven insights from certification analytics</CardDescription>
+          <CardDescription>Wawasan berbasis data dari analitik sertifikasi</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="p-4 bg-white rounded-lg shadow-sm border border-green-100 hover:shadow-md transition-shadow">
               <div className="flex items-center gap-2 mb-2">
                 <CheckCircle className="w-4 h-4 text-green-500" />
-                <h4 className="font-semibold text-gray-900">Active Certifications</h4>
+                <h4 className="font-semibold text-gray-900">Sertifikasi Aktif</h4>
               </div>
               <p className="text-sm text-gray-700">
                 {stats.totalCertifications > 0
                   ? ((stats.activeCertifications / stats.totalCertifications) * 100).toFixed(1)
                   : 0}
-                % of certificates are currently active
+                % sertifikat saat ini aktif
               </p>
-              <p className="text-xs text-gray-500 mt-1">Strong compliance maintenance</p>
+              <p className="text-xs text-gray-500 mt-1">Pemeliharaan kepatuhan yang kuat</p>
             </div>
 
             <div className="p-4 bg-white rounded-lg shadow-sm border border-orange-100 hover:shadow-md transition-shadow">
               <div className="flex items-center gap-2 mb-2">
                 <Clock className="w-4 h-4 text-orange-500" />
-                <h4 className="font-semibold text-gray-900">Renewal Planning</h4>
+                <h4 className="font-semibold text-gray-900">Perencanaan Perpanjangan</h4>
               </div>
-              <p className="text-sm text-gray-700">{stats.expiringSoon} certificates expire within 6 months</p>
-              <p className="text-xs text-gray-500 mt-1">Immediate renewal action required</p>
+              <p className="text-sm text-gray-700">{stats.expiringSoon} sertifikat berakhir dalam 6 bulan</p>
+              <p className="text-xs text-gray-500 mt-1">Diperlukan tindakan perpanjangan segera</p>
             </div>
 
             <div className="p-4 bg-white rounded-lg shadow-sm border border-purple-100 hover:shadow-md transition-shadow">
               <div className="flex items-center gap-2 mb-2">
                 <Award className="w-4 h-4 text-purple-500" />
-                <h4 className="font-semibold text-gray-900">Certification Diversity</h4>
+                <h4 className="font-semibold text-gray-900">Keberagaman Sertifikasi</h4>
               </div>
               <p className="text-sm text-gray-700">
-                {stats.uniqueTypes} Orang Yang memiliki Sertifikat dari lebih dari 2 
+                {stats.uniqueTypes} jenis sertifikat yang berbeda tersedia
               </p>
-              <p className="text-xs text-gray-500 mt-1">Diverse professional development</p>
+              <p className="text-xs text-gray-500 mt-1">Pengembangan profesional yang beragam</p>
             </div>
           </div>
         </CardContent>

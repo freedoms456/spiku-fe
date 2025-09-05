@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState,useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/axios";
 
@@ -10,6 +10,14 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+    // 🔹 Cek user di localStorage, kalau ada redirect
+    useEffect(() => {
+      const user = localStorage.getItem("user");
+      if (user) {
+        router.replace("/homepage"); // replace biar ga bisa back ke login
+      }
+    }, [router]);
 
   const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -44,33 +52,53 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-6">
-      <form onSubmit={onSubmit} className="w-full max-w-sm space-y-4">
-        <h1 className="text-2xl font-semibold">Login</h1>
-        {err && <p className="text-red-600 text-sm">{err}</p>}
-        <input
-          className="w-full border px-3 py-2 rounded"
-          placeholder="email"
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-        />
-        <input
-          className="w-full border px-3 py-2 rounded"
-          placeholder="password"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-        />
-        <button
-          disabled={loading}
-          className="w-full bg-black text-white py-2 rounded disabled:opacity-50"
-        >
-          {loading ? "Signing in..." : "Sign in"}
-        </button>
-      </form>
+   <main className="min-h-screen flex items-center justify-center p-6">
+      <div className="flex w-full max-w-4xl bg-white shadow-lg rounded-2xl overflow-hidden">
+        {/* Kiri: Logo */}
+        <div className="hidden md:flex w-1/2 items-center justify-center bg-gray-50 p-6">
+          <img
+            src="/logo.png"
+            alt="Logo"
+            width={300}
+            height={300}
+            className="object-contain"
+          />
+        </div>
+
+        {/* Kanan: Form */}
+        <div className="w-full md:w-1/2 p-8">
+          <form onSubmit={onSubmit} className="space-y-4">
+            <h1 className="text-2xl font-semibold text-center">Masuk</h1>
+            {err && <p className="text-red-600 text-sm">{err}</p>}
+
+            <input
+              className="w-full border px-3 py-2 rounded"
+              placeholder="Username"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+
+            <input
+              className="w-full border px-3 py-2 rounded"
+              placeholder="Kata Sandi"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+
+            <button
+              disabled={loading}
+              className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white py-2 rounded disabled:opacity-50"
+            >
+              {loading ? "Sedang masuk..." : "Masuk"}
+            </button>
+          </form>
+        </div>
+      </div>
     </main>
+  
   );
 }

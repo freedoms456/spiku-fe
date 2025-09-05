@@ -4,7 +4,7 @@ import { useState, useMemo } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Users, Heart, MapPin, BarChart3, TrendingUp, Activity, Baby, User, AlertTriangle } from "lucide-react"
+import { Users, Heart, MapPin, BarChart3, TrendingUp, Activity, Baby, User, AlertTriangle, CheckCircle } from "lucide-react"
 import { accounts, familiess } from "@/lib/employee-management-data"
 import dynamic from "next/dynamic"
 
@@ -17,7 +17,7 @@ interface FamilyAnalyticsProps {
   onFilterChange?: (filters: any) => void
 }
 
-export default function FamilyAnalytics({
+export default function AnalitikKeluarga({
   filteredFamilies: propFilteredFamilies,
   filteredAccounts: propFilteredAccounts,
   familiesAcc: families,
@@ -28,28 +28,83 @@ export default function FamilyAnalytics({
   const [selectedRelation, setSelectedRelation] = useState<string | null>(null)
   // const families = {}
 
-  // Calculate age from birth date
-  const calculateAge = (birthDate: string) => {
-    const today = new Date();
-  
-    // birthDate format: "DD/MM/YYYY"
-    const [day, month, year] = birthDate.split("-").map(Number);
-    const birth = new Date(year, month - 1, day); // bulan dikurangi 1 karena index dimulai 0
-  
-    let age = today.getFullYear() - birth.getFullYear();
-    const monthDiff = today.getMonth() - birth.getMonth();
-  
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-      age--;
+  // Menghitung umur dari tanggal lahir dengan error handling
+  const calculateAge = (birthDate: string): number => {
+    try {
+      // Validasi input kosong atau null
+      if (!birthDate || typeof birthDate !== 'string') {
+        return 100;
+      }
+
+      const today = new Date();
+      
+      // birthDate format: bisa "DD/MM/YYYY" atau "YYYY-MM-DD"
+      let dateParts: string[];
+      if (birthDate.includes("/")) {
+        dateParts = birthDate.split("/");
+      } else if (birthDate.includes("-")) {
+        dateParts = birthDate.split("-");
+        // Jika format YYYY-MM-DD, ubah urutan ke DD/MM/YYYY
+        if (dateParts[0].length === 4) {
+          dateParts = [dateParts[2], dateParts[1], dateParts[0]];
+        }
+      } else {
+        return 100;
+      }
+      
+      // Validasi format tanggal (harus ada 3 bagian)
+      if (dateParts.length !== 3) {
+        return 100;
+      }
+      
+      const [day, month, year] = dateParts.map(Number);
+      
+      // Validasi angka valid
+      if (isNaN(day) || isNaN(month) || isNaN(year)) {
+        return 100;
+      }
+      
+      // Validasi rentang tanggal yang masuk akal
+      if (day < 1 || day > 31 || month < 1 || month > 12 || year < 1900 || year > today.getFullYear()) {
+        return 100;
+      }
+      
+      // bulan dikurangi 1 karena index dimulai 0
+      const birth = new Date(year, month - 1, day);
+      
+      // Validasi tanggal yang dibuat valid
+      if (isNaN(birth.getTime())) {
+        return 100;
+      }
+      
+      // Validasi tanggal lahir tidak di masa depan
+      if (birth > today) {
+        return 100;
+      }
+      
+      let age = today.getFullYear() - birth.getFullYear();
+      const monthDiff = today.getMonth() - birth.getMonth();
+      
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+        age--;
+      }
+      
+      // Validasi umur dalam rentang yang masuk akal
+      if (age < 0 || age > 150) {
+        return 100;
+      }
+      
+      return age;
+    } catch (error) {
+      // Jika ada error apapun, return 100
+      console.warn('Error calculating age:', error);
+      return 100;
     }
-  
-    return age;
   };
 
   
-  // Get filtered families based on selections
-  // Family Analytics
-    const getFilteredAccounts = useMemo(() => {
+  // Mendapatkan keluarga yang telah difilter berdasarkan pilihan
+  const getFilteredAccounts = useMemo(() => {
     
       let filtered = propFilteredAccounts
       
@@ -60,7 +115,7 @@ export default function FamilyAnalytics({
 
   
 
-  // Family Members per Employee Chart
+  // Grafik Anggota Keluarga per Pegawai
   const getFamilyMembersPerEmployee = () => {
     const accountsToUse = propFilteredAccounts
     if (!accountsToUse || accountsToUse.length === 0) {
@@ -69,13 +124,13 @@ export default function FamilyAnalytics({
         options: {
           chart: { type: "bar" as const, height: 350 },
           xaxis: { categories: [] },
-          noData: { text: "No data available" },
+          noData: { text: "Tidak ada data tersedia" },
         },
       }
     }
 
     const employeeFamilyCount = propFilteredAccounts.map((account) => ({
-      name: account.account_name || "Unknown",
+      name: account.account_name || "Tidak Diketahui",
       count: account.keluarga?.length ?? 0
     }))
 
@@ -85,7 +140,7 @@ export default function FamilyAnalytics({
     return {
       series: [
         {
-          name: "Total Family Members",
+          name: "Total Anggota Keluarga",
           data: totalData,
         },
       
@@ -128,7 +183,7 @@ export default function FamilyAnalytics({
         },
         yaxis: {
           title: {
-            text: "Number of Family Members",
+            text: "Jumlah Anggota Keluarga",
             style: {
               fontWeight: "600",
             },
@@ -136,7 +191,7 @@ export default function FamilyAnalytics({
         },
         colors: ["#3B82F6", "#EF4444"],
         title: {
-          text: "Family Members per Employee",
+          text: "Anggota Keluarga per Pegawai",
           align: "center" as const,
           style: {
             fontSize: "16px",
@@ -166,7 +221,7 @@ export default function FamilyAnalytics({
     }
   }
 
-  // Relationship Distribution Chart
+  // Grafik Distribusi Hubungan
   const getRelationshipDistribution = () => {
     const filteredFamilies = getFilteredAccounts
     if (!filteredFamilies || filteredFamilies.length === 0) {
@@ -175,7 +230,7 @@ export default function FamilyAnalytics({
         options: {
           chart: { type: "donut" as const, height: 350 },
           labels: [],
-          noData: { text: "No data available" },
+          noData: { text: "Tidak ada data tersedia" },
         },
       }
     }
@@ -184,7 +239,7 @@ export default function FamilyAnalytics({
     const relationshipCounts = filteredFamilies.reduce((acc, account) => {
       if (Array.isArray(account.keluarga)) {
         account.keluarga.forEach((fam) => {
-          const relation = fam.hubungan || "Unknown"
+          const relation = fam.hubungan || "Tidak Diketahui"
           acc[relation] = (acc[relation] || 0) + 1
         })
       }
@@ -221,7 +276,7 @@ export default function FamilyAnalytics({
         labels,
         colors: ["#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899"],
         title: {
-          text: "Family Relationship Distribution",
+          text: "Distribusi Hubungan Keluarga",
           align: "center" as const,
           style: {
             fontSize: "16px",
@@ -259,7 +314,7 @@ export default function FamilyAnalytics({
         },
         tooltip: {
           y: {
-            formatter: (val: number) => `${val} members`,
+            formatter: (val: number) => `${val} anggota`,
           },
           theme: "light",
         },
@@ -276,23 +331,23 @@ export default function FamilyAnalytics({
     }
   }
 
-  // Location Distribution Chart
+  // Grafik Distribusi Lokasi
   const getLocationDistribution = () => {
     const filteredFamilies = families
     if (!filteredFamilies || filteredFamilies.length === 0) {
       return {
-        series: [{ name: "Family Members", data: [] }],
+        series: [{ name: "Anggota Keluarga", data: [] }],
         options: {
           chart: { type: "bar" as const, height: 350 },
           xaxis: { categories: [] },
-          noData: { text: "No data available" },
+          noData: { text: "Tidak ada data tersedia" },
         },
       }
     }
 
     const locationCounts = filteredFamilies.reduce(
       (acc, family) => {
-        const location = family.domisili_sekarang || "Unknown"
+        const location = family.domisili_sekarang || "Tidak Diketahui"
         acc[location] = (acc[location] || 0) + 1
         return acc
       },
@@ -305,7 +360,7 @@ export default function FamilyAnalytics({
     return {
       series: [
         {
-          name: "Family Members",
+          name: "Anggota Keluarga",
           data,
         },
       ],
@@ -351,7 +406,7 @@ export default function FamilyAnalytics({
         },
         yaxis: {
           title: {
-            text: "Locations",
+            text: "Lokasi",
             style: {
               fontWeight: "600",
             },
@@ -359,7 +414,7 @@ export default function FamilyAnalytics({
         },
         colors: ["#10B981"],
         title: {
-          text: "Family Members by Location",
+          text: "Anggota Keluarga Berdasarkan Lokasi",
           align: "center" as const,
           style: {
             fontSize: "16px",
@@ -369,7 +424,7 @@ export default function FamilyAnalytics({
         },
         tooltip: {
           y: {
-            formatter: (val: number) => `${val} members`,
+            formatter: (val: number) => `${val} anggota`,
           },
           theme: "light",
         },
@@ -381,16 +436,16 @@ export default function FamilyAnalytics({
     }
   }
 
-  // Age Distribution Chart
+  // Grafik Distribusi Umur
   // const getFamilyAgeDistribution = () => {
   //   const filteredFamilies = getFilteredAccounts
   //   if (!filteredFamilies || filteredFamilies.length === 0) {
   //     return {
-  //       series: [{ name: "Family Members", data: [] }],
+  //       series: [{ name: "Anggota Keluarga", data: [] }],
   //       options: {
   //         chart: { type: "column" as const, height: 350 },
   //         xaxis: { categories: [] },
-  //         noData: { text: "No data available" },
+  //         noData: { text: "Tidak ada data tersedia" },
   //       },
   //     }
   //   }
@@ -420,7 +475,7 @@ export default function FamilyAnalytics({
   //   return {
   //     series: [
   //       {
-  //         name: "Family Members",
+  //         name: "Anggota Keluarga",
   //         data: Object.values(ageRanges),
   //       },
   //     ],
@@ -455,7 +510,7 @@ export default function FamilyAnalytics({
   //       },
   //       yaxis: {
   //         title: {
-  //           text: "Number of Family Members",
+  //           text: "Jumlah Anggota Keluarga",
   //           style: {
   //             fontWeight: "600",
   //           },
@@ -463,7 +518,7 @@ export default function FamilyAnalytics({
   //       },
   //       colors: ["#8B5CF6"],
   //       title: {
-  //         text: "Family Members Age Distribution",
+  //         text: "Distribusi Umur Anggota Keluarga",
   //         align: "center" as const,
   //         style: {
   //           fontSize: "16px",
@@ -473,7 +528,7 @@ export default function FamilyAnalytics({
   //       },
   //       tooltip: {
   //         y: {
-  //           formatter: (val: number) => `${val} members`,
+  //           formatter: (val: number) => `${val} anggota`,
   //         },
   //         theme: "light",
   //       },
@@ -489,7 +544,7 @@ export default function FamilyAnalytics({
 
 
 
-  // Summary Statistics
+  // Statistik Ringkasan
   const getSummaryStats = () => {
     const filteredFamilies = getFilteredAccounts
     if (!filteredFamilies || filteredFamilies.length === 0) {
@@ -517,7 +572,7 @@ export default function FamilyAnalytics({
     .flatMap((acc) => acc.keluarga || []) // ambil semua keluarga dari tiap akun
     .filter((fam) => fam.tanggal_lahir)   // hanya yang punya tanggal lahir
     .map((fam) => calculateAge(fam.tanggal_lahir))
-    .filter((age) => !isNaN(age))
+    .filter((age) => !isNaN(age) && age !== 100) // filter out error values
     
    
       const avgAge =
@@ -543,13 +598,13 @@ export default function FamilyAnalytics({
 
   return (
     <div className="space-y-6">
-      {/* Filter Status and Clear Button */}
+      {/* Status Filter dan Tombol Hapus */}
       {(selectedEmployee || selectedLocation || selectedRelation) && (
         <Card className="border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm font-semibold text-blue-800">Active Filters:</span>
+                <span className="text-sm font-semibold text-blue-800">Filter Aktif:</span>
                 {selectedEmployee && (
                   <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-200 transition-colors">
                     <User className="w-3 h-3 mr-1" />
@@ -581,23 +636,23 @@ export default function FamilyAnalytics({
                 size="sm"
                 className="hover:bg-blue-100 transition-colors bg-transparent"
               >
-                Clear All Filters
+                Hapus Semua Filter
               </Button>
             </div>
           </CardContent>
         </Card>
       )}
 
-      {/* Summary Cards */}
+      {/* Kartu Ringkasan */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <Card className="hover:shadow-lg transition-all duration-300 hover:scale-105 bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-blue-700">Total Families</p>
+                <p className="text-sm font-medium text-blue-700">Total Keluarga</p>
                 <p className="text-2xl font-bold text-blue-600">{stats.totalFamilies}</p>
                 <p className="text-xs text-blue-600 mt-1">
-                  {families.length > 0 ? ((stats.totalFamilies / families.length) * 100).toFixed(1) : 0}% of all
+                  {families?.length > 0 ? ((stats.totalFamilies / families.length) * 100).toFixed(1) : 0}% dari semua
                 </p>
               </div>
               <Users className="w-8 h-8 text-blue-600" />
@@ -605,14 +660,13 @@ export default function FamilyAnalytics({
           </CardContent>
         </Card>
 
-
         <Card className="hover:shadow-lg transition-all duration-300 hover:scale-105 bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-purple-700">Locations</p>
+                <p className="text-sm font-medium text-purple-700">Lokasi</p>
                 <p className="text-2xl font-bold text-purple-600">{stats.uniqueLocations}</p>
-                <p className="text-xs text-purple-600 mt-1">Different areas</p>
+                <p className="text-xs text-purple-600 mt-1">Daerah berbeda</p>
               </div>
               <MapPin className="w-8 h-8 text-purple-600" />
             </div>
@@ -623,9 +677,9 @@ export default function FamilyAnalytics({
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-orange-700">Average Age</p>
+                <p className="text-sm font-medium text-orange-700">Rata-rata Umur</p>
                 <p className="text-2xl font-bold text-orange-600">{stats.avgAge}</p>
-                <p className="text-xs text-orange-600 mt-1">Years old</p>
+                <p className="text-xs text-orange-600 mt-1">Tahun</p>
               </div>
               <Baby className="w-8 h-8 text-orange-600" />
             </div>
@@ -633,17 +687,17 @@ export default function FamilyAnalytics({
         </Card>
       </div>
 
-      {/* First Row - 3 Charts */}
+      {/* Baris Pertama - 3 Grafik */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Family Members per Employee */}
+        {/* Anggota Keluarga per Pegawai */}
         <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-blue-50 border-blue-200">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
               <BarChart3 className="w-5 h-5 text-blue-600" />
-              Family Members per Employee
+              Anggota Keluarga per Pegawai
             </CardTitle>
             <CardDescription className="text-sm">
-              Click bars to filter by employee. Shows total and sick family members.
+              Klik batang untuk filter berdasarkan pegawai. Menampilkan total anggota keluarga.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -656,15 +710,15 @@ export default function FamilyAnalytics({
           </CardContent>
         </Card>
 
-        {/* Relationship Distribution */}
+        {/* Distribusi Hubungan */}
         <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-green-50 border-green-200">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Users className="w-5 h-5 text-green-600" />
-              Relationship Distribution
+              Distribusi Hubungan
             </CardTitle>
             <CardDescription className="text-sm">
-              Click segments to filter by relationship type. Interactive donut chart.
+              Klik segmen untuk filter berdasarkan jenis hubungan. Grafik donat interaktif.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -677,15 +731,15 @@ export default function FamilyAnalytics({
           </CardContent>
         </Card>
 
-        {/* Location Distribution */}
+        {/* Distribusi Geografis */}
         <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-purple-50 border-purple-200">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
               <MapPin className="w-5 h-5 text-purple-600" />
-              Geographic Distribution
+              Distribusi Geografis
             </CardTitle>
             <CardDescription className="text-sm">
-              Click bars to filter by location. Shows family member distribution across areas.
+              Klik batang untuk filter berdasarkan lokasi. Menampilkan distribusi anggota keluarga di berbagai daerah.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -699,18 +753,18 @@ export default function FamilyAnalytics({
         </Card>
       </div>
 
-      {/* Second Row - 3 Charts */}
+      {/* Baris Kedua - 3 Grafik */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
      
 
-        {/* Age Distribution */}
+        {/* Distribusi Umur */}
         {/* <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-indigo-50 border-indigo-200">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
               <TrendingUp className="w-5 h-5 text-indigo-600" />
-              Age Distribution
+              Distribusi Umur
             </CardTitle>
-            <CardDescription className="text-sm">Age groups of family members across all employees.</CardDescription>
+            <CardDescription className="text-sm">Kelompok umur anggota keluarga di seluruh pegawai.</CardDescription>
           </CardHeader>
           <CardContent>
             <Chart

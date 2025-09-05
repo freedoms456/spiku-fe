@@ -16,7 +16,7 @@ interface AccountsAnalyticsProps {
 
 const Chart = dynamic(() => import("react-apexcharts"), { ssr: false })
 
-export default function AccountsAnalytics({
+export default function AnalitikAkun({
   filteredAccounts: propFilteredAccounts,
   onFilterChange,
 }: AccountsAnalyticsProps = {}) {
@@ -25,26 +25,73 @@ export default function AccountsAnalytics({
   const [selectedUnit, setSelectedUnit] = useState<string | null>(null)
   const [selectedAge, setSelectedAge] = useState<string | null>(null)
   const accounts = {}
-  // Calculate age from birth date
-  const calculateAge = (birthDate: string) => {
-    const today = new Date();
-  
-    // birthDate format: "DD/MM/YYYY"
-    const [day, month, year] = birthDate.split("/").map(Number);
-    const birth = new Date(year, month - 1, day); // bulan dikurangi 1 karena index dimulai 0
-  
-    let age = today.getFullYear() - birth.getFullYear();
-    const monthDiff = today.getMonth() - birth.getMonth();
-  
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-      age--;
+
+  // Menghitung umur dari tanggal lahir dengan error handling
+  const calculateAge = (birthDate: string): number => {
+    try {
+      // Validasi input kosong atau null
+      if (!birthDate || typeof birthDate !== 'string') {
+        return 100;
+      }
+
+      const today = new Date();
+      
+      // birthDate format: "DD/MM/YYYY"
+      const dateParts = birthDate.split("/");
+      
+      // Validasi format tanggal (harus ada 3 bagian)
+      if (dateParts.length !== 3) {
+        return 100;
+      }
+      
+      const [day, month, year] = dateParts.map(Number);
+      
+      // Validasi angka valid
+      if (isNaN(day) || isNaN(month) || isNaN(year)) {
+        return 100;
+      }
+      
+      // Validasi rentang tanggal yang masuk akal
+      if (day < 1 || day > 31 || month < 1 || month > 12 || year < 1900 || year > today.getFullYear()) {
+        return 100;
+      }
+      
+      // bulan dikurangi 1 karena index dimulai 0
+      const birth = new Date(year, month - 1, day);
+      
+      // Validasi tanggal yang dibuat valid
+      if (isNaN(birth.getTime())) {
+        return 100;
+      }
+      
+      // Validasi tanggal lahir tidak di masa depan
+      if (birth > today) {
+        return 100;
+      }
+      
+      let age = today.getFullYear() - birth.getFullYear();
+      const monthDiff = today.getMonth() - birth.getMonth();
+      
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+        age--;
+      }
+      
+      // Validasi umur dalam rentang yang masuk akal
+      if (age < 0 || age > 150) {
+        return 100;
+      }
+      
+      return age;
+    } catch (error) {
+      // Jika ada error apapun, return 100
+      console.warn('Error calculating age:', error);
+      return 100;
     }
-  
-    return age;
   };
   
   let filtered = accounts
-  // Get filtered accounts based on selections
+
+  // Mendapatkan akun yang telah difilter berdasarkan pilihan
   const getFilteredAccounts = () => {
     // console.log(selectedAge)
     if (propFilteredAccounts) {
@@ -54,7 +101,7 @@ export default function AccountsAnalytics({
     return filtered
   }
 
-  // Gender Distribution Chart
+  // Grafik Distribusi Jenis Kelamin
   const getGenderDistribution = () => {
     const filteredAccounts = getFilteredAccounts()
     if (!filteredAccounts || filteredAccounts.length === 0) {
@@ -63,15 +110,17 @@ export default function AccountsAnalytics({
         options: {
           chart: { type: "donut" as const, height: 350 },
           labels: [],
-          noData: { text: "No data available" },
+          noData: { text: "Tidak ada data tersedia" },
         },
       }
     }
 
     const genderCounts = filteredAccounts.reduce(
       (acc, account) => {
-        const gender = account.account_jenis_kelamin || "Unknown"
-        acc[gender] = (acc[gender] || 0) + 1
+        const gender = account.account_jenis_kelamin || "Tidak Diketahui"
+        // Translate gender labels
+        const genderLabel = gender === "L" ? "Laki-laki" : gender === "P" ? "Perempuan" : "Tidak Diketahui"
+        acc[genderLabel] = (acc[genderLabel] || 0) + 1
         return acc
       },
       {} as Record<string, number>,
@@ -86,7 +135,7 @@ export default function AccountsAnalytics({
         options: {
           chart: { type: "donut" as const, height: 350 },
           labels: [],
-          noData: { text: "No data available" },
+          noData: { text: "Tidak ada data tersedia" },
         },
       }
     }
@@ -100,8 +149,10 @@ export default function AccountsAnalytics({
           events: {
             dataPointSelection: (event: any, chartContext: any, config: any) => {
               if (config && config.dataPointIndex >= 0 && labels[config.dataPointIndex]) {
-                const gender = labels[config.dataPointIndex]
-                const newGender = selectedGender === gender ? null : gender
+                const genderLabel = labels[config.dataPointIndex]
+                // Convert back to original format for filtering
+                const originalGender = genderLabel === "Laki-laki" ? "L" : genderLabel === "Perempuan" ? "P" : genderLabel
+                const newGender = selectedGender === originalGender ? null : originalGender
                 setSelectedGender(newGender)
                 onFilterChange?.({ gender: newGender, grade: selectedGrade, unit: selectedUnit, age: selectedAge })
               }
@@ -111,7 +162,7 @@ export default function AccountsAnalytics({
         labels,
         colors: ["#3B82F6", "#EC4899"],
         title: {
-          text: "Gender Distribution",
+          text: "Distribusi Jenis Kelamin",
           align: "center" as const,
           style: {
             fontSize: "16px",
@@ -149,7 +200,7 @@ export default function AccountsAnalytics({
         },
         tooltip: {
           y: {
-            formatter: (val: number) => `${val} employees`,
+            formatter: (val: number) => `${val} pegawai`,
           },
           theme: "light",
         },
@@ -157,17 +208,17 @@ export default function AccountsAnalytics({
     }
   }
 
-  // Age Distribution Chart
+  // Grafik Distribusi Umur
   const getAgeDistribution = () => {
     const filteredAccounts = getFilteredAccounts()
   
     if (!filteredAccounts || filteredAccounts.length === 0) {
       return {
-        series: [{ name: "Employees", data: [] }],
+        series: [{ name: "Pegawai", data: [] }],
         options: {
           chart: { type: "bar" as const, height: 350 },
           xaxis: { categories: [] },
-          noData: { text: "No data available" },
+          noData: { text: "Tidak ada data tersedia" },
         },
       }
     }
@@ -197,7 +248,7 @@ export default function AccountsAnalytics({
     return {
       series: [
         {
-          name: "Employees",
+          name: "Pegawai",
           data: Object.values(ageRanges),
         },
       ],
@@ -248,7 +299,7 @@ export default function AccountsAnalytics({
         },
         yaxis: {
           title: {
-            text: "Age Ranges",
+            text: "Rentang Umur",
             style: {
               fontWeight: "600",
             },
@@ -256,7 +307,7 @@ export default function AccountsAnalytics({
         },
         colors: ["#10B981"],
         title: {
-          text: "Age Distribution",
+          text: "Distribusi Umur",
           align: "center" as const,
           style: {
             fontSize: "16px",
@@ -266,7 +317,7 @@ export default function AccountsAnalytics({
         },
         tooltip: {
           y: {
-            formatter: (val: number) => `${val} employees`,
+            formatter: (val: number) => `${val} pegawai`,
           },
           theme: "light",
         },
@@ -278,23 +329,23 @@ export default function AccountsAnalytics({
     }
   }
 
-  // Grade Distribution Chart
+  // Grafik Distribusi Golongan
   const getGradeDistribution = () => {
     const filteredAccounts = getFilteredAccounts()
     if (!filteredAccounts || filteredAccounts.length === 0) {
       return {
-        series: [{ name: "Employees", data: [] }],
+        series: [{ name: "Pegawai", data: [] }],
         options: {
           chart: { type: "bar" as const, height: 350 },
           xaxis: { categories: [] },
-          noData: { text: "No data available" },
+          noData: { text: "Tidak ada data tersedia" },
         },
       }
     }
 
     const gradeCounts = filteredAccounts.reduce(
       (acc, account) => {
-        const grade = account.account_golongan || "Unknown"
+        const grade = account.account_golongan || "Tidak Diketahui"
         acc[grade] = (acc[grade] || 0) + 1
         return acc
       },
@@ -307,7 +358,7 @@ export default function AccountsAnalytics({
     return {
       series: [
         {
-          name: "Employees",
+          name: "Pegawai",
           data,
         },
       ],
@@ -353,7 +404,7 @@ export default function AccountsAnalytics({
         },
         yaxis: {
           title: {
-            text: "Grade Levels",
+            text: "Tingkat Golongan",
             style: {
               fontWeight: "600",
             },
@@ -361,7 +412,7 @@ export default function AccountsAnalytics({
         },
         colors: ["#8B5CF6"],
         title: {
-          text: "Grade Distribution",
+          text: "Distribusi Golongan",
           align: "center" as const,
           style: {
             fontSize: "16px",
@@ -371,7 +422,7 @@ export default function AccountsAnalytics({
         },
         tooltip: {
           y: {
-            formatter: (val: number) => `${val} employees`,
+            formatter: (val: number) => `${val} pegawai`,
           },
           theme: "light",
         },
@@ -383,23 +434,23 @@ export default function AccountsAnalytics({
     }
   }
 
-  // Unit Distribution Chart
+  // Grafik Distribusi Unit
   const getUnitDistribution = () => {
     const filteredAccounts = getFilteredAccounts()
     if (!filteredAccounts || filteredAccounts.length === 0) {
       return {
-        series: [{ name: "Employees", data: [] }],
+        series: [{ name: "Pegawai", data: [] }],
         options: {
           chart: { type: "bar" as const, height: 350 },
           xaxis: { categories: [] },
-          noData: { text: "No data available" },
+          noData: { text: "Tidak ada data tersedia" },
         },
       }
     }
 
     const unitCounts = filteredAccounts.reduce(
       (acc, account) => {
-        const unit = account.account_unit || "Unknown"
+        const unit = account.account_unit || "Tidak Diketahui"
         acc[unit] = (acc[unit] || 0) + 1
         return acc
       },
@@ -412,7 +463,7 @@ export default function AccountsAnalytics({
     return {
       series: [
         {
-          name: "Employees",
+          name: "Pegawai",
           data,
         },
       ],
@@ -454,7 +505,7 @@ export default function AccountsAnalytics({
         },
         yaxis: {
           title: {
-            text: "Number of Employees",
+            text: "Jumlah Pegawai",
             style: {
               fontWeight: "600",
             },
@@ -462,7 +513,7 @@ export default function AccountsAnalytics({
         },
         colors: ["#F59E0B"],
         title: {
-          text: "Unit Distribution",
+          text: "Distribusi Unit",
           align: "center" as const,
           style: {
             fontSize: "16px",
@@ -472,7 +523,7 @@ export default function AccountsAnalytics({
         },
         tooltip: {
           y: {
-            formatter: (val: number) => `${val} employees`,
+            formatter: (val: number) => `${val} pegawai`,
           },
           theme: "light",
         },
@@ -484,16 +535,16 @@ export default function AccountsAnalytics({
     }
   }
 
-  // Position Distribution Chart
+  // Grafik Distribusi Jabatan
   const getPositionDistribution = () => {
     const filteredAccounts = getFilteredAccounts()
     if (!filteredAccounts || filteredAccounts.length === 0) {
       return {
-        series: [{ name: "Employees", data: [] }],
+        series: [{ name: "Pegawai", data: [] }],
         options: {
           chart: { type: "bar" as const, height: 500 },
           xaxis: { categories: [] },
-          noData: { text: "No data available" },
+          noData: { text: "Tidak ada data tersedia" },
         },
       }
     }
@@ -501,7 +552,7 @@ export default function AccountsAnalytics({
     const positionCounts = filteredAccounts.reduce((acc, account) => {
       const positions = account.account_jabatan ?? []
     
-      let latestPositionName = "Unknown"
+      let latestPositionName = "Tidak Diketahui"
     
       if (positions.length > 0) {
         // Urutkan berdasarkan awal_menjabat, ambil yang terbaru
@@ -511,7 +562,7 @@ export default function AccountsAnalytics({
     
         const name = latest.name
     
-        // Mapping alias
+        // Pemetaan alias
         if (name.includes("Kepala")) {
           latestPositionName = "Pejabat Struktural"
         } else if (["Pemeriksa", "Pranata", "Ahli", "Muda"].some((keyword) =>
@@ -533,7 +584,7 @@ export default function AccountsAnalytics({
     return {
       series: [
         {
-          name: "Employees",
+          name: "Pegawai",
           data,
         },
       ],
@@ -569,13 +620,13 @@ export default function AccountsAnalytics({
         },
         yaxis: {
           title: {
-            text: "Positions",
+            text: "Jabatan",
             style: { fontWeight: "600" },
           },
         },
         colors: ["#3B82F6"],
         title: {
-          text: "Position Distribution",
+          text: "Distribusi Jabatan",
           align: "center" as const,
           style: {
             fontSize: "16px",
@@ -585,7 +636,7 @@ export default function AccountsAnalytics({
         },
         tooltip: {
           y: {
-            formatter: (val: number) => `${val} employees`,
+            formatter: (val: number) => `${val} pegawai`,
           },
           theme: "light",
         },
@@ -597,7 +648,7 @@ export default function AccountsAnalytics({
   }
   
 
-  // Summary Statistics
+  // Statistik Ringkasan
   const getSummaryStats = () => {
     const filteredAccounts = getFilteredAccounts()
     if (!filteredAccounts || filteredAccounts.length === 0) {
@@ -613,11 +664,28 @@ export default function AccountsAnalytics({
     const totalEmployees = filteredAccounts.length
     const maleCount = filteredAccounts.filter((acc) => acc.account_jenis_kelamin === "L").length
     const femaleCount = filteredAccounts.filter((acc) => acc.account_jenis_kelamin === "P").length
+    // Filter berdasarkan status kepegawaian
+    const PNS = filteredAccounts?.length ? 
+    filteredAccounts.filter((acc) => 
+      acc.account_golongan && acc.account_golongan.toLowerCase().includes("golongan")
+    ).length : 0
+  
+  const P3K = filteredAccounts?.length ? 
+    filteredAccounts.filter((acc) => 
+      acc.account_golongan && acc.account_golongan.toLowerCase().includes("p3k")
+    ).length : 0
+  
+  const TTT = filteredAccounts?.length ? 
+    filteredAccounts.filter((acc) => {
+      if (!acc.account_golongan) return true;
+      const golongan = acc.account_golongan.toLowerCase();
+      return !golongan.includes("golongan") && !golongan.includes("p3k");
+    }).length : 0
 
     const validAges = filteredAccounts
       .filter((acc) => acc.account_tanggal_lahir)      // pastikan ada tanggal lahir
       .map((acc) => calculateAge(acc.account_tanggal_lahir))
-      .filter((age) => !isNaN(age)) 
+      .filter((age) => !isNaN(age) && age !== 100) // filter out error values
     const avgAge =
       validAges.length > 0 ? Math.round(validAges.reduce((sum, age) => sum + age, 0) / validAges.length) : 0
 
@@ -629,6 +697,9 @@ export default function AccountsAnalytics({
       femaleCount,
       avgAge,
       uniqueUnits,
+      PNS,
+      P3K,
+      TTT
     }
   }
 
@@ -644,17 +715,16 @@ export default function AccountsAnalytics({
 
   return (
     <div className="space-y-6">
-    
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+      {/* Kartu Ringkasan */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="hover:shadow-lg transition-all duration-300 hover:scale-105 bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-blue-700">Total Employees</p>
+                <p className="text-sm font-medium text-blue-700">Total Pegawai</p>
                 <p className="text-2xl font-bold text-blue-600">{stats.totalEmployees}</p>
-                <p className="text-xs text-blue-600 mt-1">Active accounts</p>
+                <p className="text-xs text-blue-600 mt-1">Akun aktif</p>
               </div>
               <Users className="w-8 h-8 text-blue-600" />
             </div>
@@ -665,10 +735,10 @@ export default function AccountsAnalytics({
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-green-700">Male Employees</p>
+                <p className="text-sm font-medium text-green-700">Pegawai Laki-laki</p>
                 <p className="text-2xl font-bold text-green-600">{stats.maleCount}</p>
                 <p className="text-xs text-green-600 mt-1">
-                  {stats.totalEmployees > 0 ? ((stats.maleCount / stats.totalEmployees) * 100).toFixed(1) : 0}% of total
+                  {stats.totalEmployees > 0 ? ((stats.maleCount / stats.totalEmployees) * 100).toFixed(1) : 0}% dari total
                 </p>
               </div>
               <Activity className="w-8 h-8 text-green-600" />
@@ -680,10 +750,10 @@ export default function AccountsAnalytics({
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-pink-700">Female Employees</p>
+                <p className="text-sm font-medium text-pink-700">Pegawai Perempuan</p>
                 <p className="text-2xl font-bold text-pink-600">{stats.femaleCount}</p>
                 <p className="text-xs text-pink-600 mt-1">
-                  {stats.totalEmployees > 0 ? ((stats.femaleCount / stats.totalEmployees) * 100).toFixed(1) : 0}% of
+                  {stats.totalEmployees > 0 ? ((stats.femaleCount / stats.totalEmployees) * 100).toFixed(1) : 0}% dari
                   total
                 </p>
               </div>
@@ -696,40 +766,74 @@ export default function AccountsAnalytics({
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-orange-700">Average Age</p>
+                <p className="text-sm font-medium text-orange-700">Rata-rata Umur</p>
                 <p className="text-2xl font-bold text-orange-600">{stats.avgAge}</p>
-                <p className="text-xs text-orange-600 mt-1">Years old</p>
+                <p className="text-xs text-orange-600 mt-1">Tahun</p>
               </div>
               <Calendar className="w-8 h-8 text-orange-600" />
             </div>
           </CardContent>
         </Card>
-
-        <Card className="hover:shadow-lg transition-all duration-300 hover:scale-105 bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
+      </div>
+      {/* Baris ke 2 */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <Card className="hover:shadow-lg transition-all duration-300 hover:scale-105 bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-purple-700">Departments</p>
-                <p className="text-2xl font-bold text-purple-600">{stats.uniqueUnits}</p>
-                <p className="text-xs text-purple-600 mt-1">Different units</p>
+                <p className="text-sm font-medium text-blue-700">PNS</p>
+                <p className="text-2xl font-bold text-blue-600">{stats.PNS}</p>
+                {stats.totalEmployees > 0 ? ((stats.PNS / stats.totalEmployees) * 100).toFixed(1) : 0}% dari total
               </div>
-              <Target className="w-8 h-8 text-purple-600" />
+              <Users className="w-8 h-8 text-blue-600" />
             </div>
           </CardContent>
         </Card>
+
+        <Card className="hover:shadow-lg transition-all duration-300 hover:scale-105 bg-gradient-to-br from-green-50 to-green-100 border-green-200">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-green-700">P3K</p>
+                <p className="text-2xl font-bold text-green-600">{stats.P3K}</p>
+                <p className="text-xs text-green-600 mt-1">
+                  {stats.totalEmployees > 0 ? ((stats.P3K / stats.totalEmployees) * 100).toFixed(1) : 0}% dari total
+                </p>
+              </div>
+              <Activity className="w-8 h-8 text-green-600" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-lg transition-all duration-300 hover:scale-105 bg-gradient-to-br from-pink-50 to-pink-100 border-pink-200">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-pink-700">Tenaga Tidak Tetap</p>
+                <p className="text-2xl font-bold text-pink-600">{stats.TTT}</p>
+                <p className="text-xs text-pink-600 mt-1">
+                 {stats.totalEmployees > 0 ? ((stats.TTT / stats.totalEmployees) * 100).toFixed(1) : 0}% dari total
+                </p>
+              </div>
+              <Users className="w-8 h-8 text-pink-600" />
+            </div>
+          </CardContent>
+        </Card>
+
+     
       </div>
 
-      {/* First Row - 3 Charts */}
+      {/* Baris Pertama - 3 Grafik */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Gender Distribution */}
+        {/* Distribusi Jenis Kelamin */}
         <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-blue-50 border-blue-200">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Users className="w-5 h-5 text-blue-600" />
-              Gender Distribution
+              Distribusi Jenis Kelamin
             </CardTitle>
             <CardDescription className="text-sm">
-              Click segments to filter by gender. Interactive donut chart.
+              Klik segmen untuk filter berdasarkan jenis kelamin. Grafik donat interaktif.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -742,14 +846,14 @@ export default function AccountsAnalytics({
           </CardContent>
         </Card>
 
-        {/* Age Distribution */}
+        {/* Distribusi Umur */}
         <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-green-50 border-green-200">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Calendar className="w-5 h-5 text-green-600" />
-              Age Distribution
+              Distribusi Umur
             </CardTitle>
-            <CardDescription className="text-sm">Click bars to filter by age range.</CardDescription>
+            <CardDescription className="text-sm">Klik batang untuk filter berdasarkan rentang umur.</CardDescription>
           </CardHeader>
           <CardContent>
             <Chart
@@ -761,15 +865,15 @@ export default function AccountsAnalytics({
           </CardContent>
         </Card>
 
-        {/* Grade Distribution */}
+        {/* Distribusi Golongan */}
         <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-purple-50 border-purple-200">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Award className="w-5 h-5 text-purple-600" />
-              Grade Distribution
+              Distribusi Golongan
             </CardTitle>
             <CardDescription className="text-sm">
-              Click bars to filter by grade level. Employee grade distribution.
+              Klik batang untuk filter berdasarkan tingkat golongan. Distribusi golongan pegawai.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -783,17 +887,17 @@ export default function AccountsAnalytics({
         </Card>
       </div>
 
-      {/* Second Row - 2 Charts */}
+      {/* Baris Kedua - 2 Grafik */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Unit Distribution */}
+        {/* Distribusi Unit */}
         <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-orange-50 border-orange-200">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Target className="w-5 h-5 text-orange-600" />
-              Unit Distribution
+              Distribusi Unit
             </CardTitle>
             <CardDescription className="text-sm">
-              Click bars to filter by unit. Employee distribution across departments.
+              Klik batang untuk filter berdasarkan unit. Distribusi pegawai di berbagai departemen.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -806,14 +910,14 @@ export default function AccountsAnalytics({
           </CardContent>
         </Card>
 
-        {/* Position Distribution */}
+        {/* Distribusi Jabatan */}
         <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-red-50 border-red-200">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
               <BarChart3 className="w-5 h-5 text-red-600" />
-              Position Distribution
+              Distribusi Jabatan
             </CardTitle>
-            <CardDescription className="text-sm">Distribution of employees across different positions.</CardDescription>
+            <CardDescription className="text-sm">Distribusi pegawai di berbagai jabatan.</CardDescription>
           </CardHeader>
           <CardContent>
             <Chart

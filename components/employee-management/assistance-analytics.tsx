@@ -1,703 +1,215 @@
-"use client"
-
-import { useState, useMemo } from "react"
+import { useMemo } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Heart, Clock, TrendingUp, Users, AlertTriangle, BarChart3, Calendar, Building, CheckCircle, Activity } from "lucide-react"
-import dynamic from "next/dynamic"
+import { Users, TrendingUp, AlertTriangle, Building, Target, BarChart3, ArrowRightLeft, UserCheck, UserX } from "lucide-react"
 
-const Chart = dynamic(() => import("react-apexcharts"), { ssr: false })
-
-interface AssistanceAnalyticsProps {
+interface UnitWorkforceAnalysisProps {
   filteredAccounts?: any[]
-  onFilterChange?: (filters: any) => void
 }
 
-export default function AssistanceAnalytics({
-  filteredAccounts: propFilteredAccounts = [],
-  onFilterChange,
-}: AssistanceAnalyticsProps) {
-  const [selectedUnit, setSelectedUnit] = useState<string | null>(null)
-  const [selectedStatus, setSelectedStatus] = useState<string | null>(null)
-  const [selectedYear, setSelectedYear] = useState<string | null>(null)
-  const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null)
+export default function UnitWorkforceAnalysis({ filteredAccounts = [] }: UnitWorkforceAnalysisProps) {
+  
+  // Konstanta kebutuhan tenaga kerja per unit (sample data)
+  const UNIT_WORKFORCE_REQUIREMENTS = {
+    "Subauditorat": 45,
+    "Sekretariat Perwakilan": 1,
+    "Subbagian Humas dan TU": 4,
+    "Subbagian Keuangan": 4,
+    "Subbagian Umum dan Teknologi Informasi": 25,
+    "Kepala Perwakilan" : 1
 
-  // Helper function to calculate days difference
-  const daysDifference = (startDate: string, endDate?: string) => {
-    if (!startDate) return 0
-    const end = endDate ? new Date(endDate.split("-").reverse().join("-")) : new Date()
-    const [day, month, year] = startDate.split("-").map(Number)
-    const start = new Date(year, month - 1, day)
-    const diffTime = Math.abs(end.getTime() - start.getTime())
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-    return diffDays
   }
 
-  // Helper to determine if assistance is active
-  const isActiveAssistance = (assistance: any) => {
-    return !assistance.tanggal_keluar || assistance.tanggal_keluar === "-"
-  }
-
-  // Get all assistance records
-  const getAllAssistanceRecords = useMemo(() => {
-    const allRecords: any[] = []
-    
-    propFilteredAccounts?.forEach(account => {
-      if (Array.isArray(account.account_perbantuan) && account.account_perbantuan.length > 0) {
-        account.account_perbantuan.forEach(perbantuan => {
-          allRecords.push({
-            ...perbantuan,
-            employee_name: account.account_name,
-            employee_id: account.id,
-            isActive: isActiveAssistance(perbantuan)
-          })
-        })
-      }
-    })
-
-    return allRecords
-  }, [propFilteredAccounts])
-
-  // Get filtered assistance records
-  const getFilteredAssistanceRecords = useMemo(() => {
-    let filtered = getAllAssistanceRecords
-
-    if (selectedUnit) {
-      filtered = filtered.filter(record => record.unit_perbantuan === selectedUnit)
-    }
-
-    if (selectedStatus) {
-      if (selectedStatus === "active") {
-        filtered = filtered.filter(record => record.isActive)
-      } else if (selectedStatus === "completed") {
-        filtered = filtered.filter(record => !record.isActive)
-      }
-    }
-
-    if (selectedYear) {
-      filtered = filtered.filter(record => {
-        if (!record.tanggal_masuk) return false
-        const [, , year] = record.tanggal_masuk.split("-")
-        return year === selectedYear
-      })
-    }
-
-    if (selectedEmployee) {
-      filtered = filtered.filter(record => record.employee_name === selectedEmployee)
-    }
-
-    return filtered
-  }, [getAllAssistanceRecords, selectedUnit, selectedStatus, selectedYear, selectedEmployee])
-
-  // Assistance by Unit Chart
-  const getAssistanceByUnit = () => {
-    const records = getAllAssistanceRecords
-    if (records.length === 0) {
+  // Analisis unit workforce
+  const getUnitWorkforceAnalysis = useMemo(() => {
+    if (!filteredAccounts || filteredAccounts.length === 0) {
       return {
-        series: [],
-        options: {
-          chart: { type: "bar" as const, height: 350 },
-          xaxis: { categories: [] },
-          noData: { text: "No assistance data available" },
-        },
+        unitStats: [],
+        totalAssignments: 0,
+        criticalUnits: [],
+        efficientUnits: [],
+        overloadedUnits: []
       }
     }
 
-    const unitCounts = records.reduce((acc, record) => {
-      const unit = record.unit_perbantuan || "Unknown"
-      acc[unit] = acc[unit] || { active: 0, completed: 0 }
-      
-      if (record.isActive) {
-        acc[unit].active++
-      } else {
-        acc[unit].completed++
-      }
+    // Hitung pegawai per unit
+    const unitEmployeeCounts = filteredAccounts.reduce((acc, account) => {
+      const unit = account.account_unit || "Tidak Diketahui"
+      acc[unit] = (acc[unit] || 0) + 1
       return acc
-    }, {} as Record<string, { active: number, completed: number }>)
+    }, {} as Record<string, number>)
 
-    const categories = Object.keys(unitCounts)
-    const activeData = categories.map(unit => unitCounts[unit].active)
-    const completedData = categories.map(unit => unitCounts[unit].completed)
+    console.log(unitEmployeeCounts)
+    // Hitung perbantuan yang diberikan oleh setiap unit
+    const unitAssistanceGiven = filteredAccounts.reduce((acc, account) => {
+      const unit = account.account_unit || "Tidak Diketahui"
+      
+      const activeAssistance = Array.isArray(account.account_perbantuan) 
+        ? account.account_perbantuan.filter(perbantuan => {
+            // Jika tanggal_keluar kosong/null/undefined = masih aktif
+            if (!perbantuan.tanggal_keluar || 
+                perbantuan.tanggal_keluar === '' || 
+                perbantuan.tanggal_keluar === '0') {
+              return true
+            }
+            
+            try {
+              const dateParts = perbantuan.tanggal_keluar.split('-')
+              if (dateParts.length !== 3) return true // format tidak valid, anggap aktif
+              
+              const [day, month, year] = dateParts.map(Number)
+              if (isNaN(day) || isNaN(month) || isNaN(year)) return true
+              
+              const exitDate = new Date(year, month - 1, day)
+              const today = new Date()
+              today.setHours(0, 0, 0, 0) // set ke awal hari untuk perbandingan yang akurat
+              
+              return exitDate >= today
+            } catch (error) {
+              return true // jika error, anggap masih aktif
+            }
+          })
+        : []
+      
+      acc[unit] = (acc[unit] || 0) + activeAssistance.length
+      return acc
+    }, {} as Record<string, number>)
 
-    return {
-      series: [
-        {
-          name: "Active Assistance",
-          data: activeData,
-        },
-        {
-          name: "Completed Assistance",
-          data: completedData,
-        },
-      ],
-      options: {
-        chart: {
-          type: "bar" as const,
-          height: 350,
-          stacked: true,
-          toolbar: { show: false },
-          events: {
-            dataPointSelection: (_event: any, _chartContext: any, config: any) => {
-              if (config && config.dataPointIndex >= 0 && categories[config.dataPointIndex]) {
-                const unit = categories[config.dataPointIndex]
-                const newUnit = selectedUnit === unit ? null : unit
-                setSelectedUnit(newUnit)
-                onFilterChange?.({ unit: newUnit, status: selectedStatus, year: selectedYear, employee: selectedEmployee })
-              }
-            },
-          },
-        },
-        plotOptions: {
-          bar: {
-            borderRadius: 6,
-            horizontal: false,
-            columnWidth: "70%",
-          },
-        },
-        dataLabels: {
-          enabled: false,
-        },
-        xaxis: {
-          categories,
-          labels: {
-            rotate: -45,
-            style: {
-              fontSize: "11px",
-              fontWeight: "500",
-            },
-          },
-        },
-        yaxis: {
-          title: {
-            text: "Number of Assistance Records",
-            style: { fontWeight: "600" },
-          },
-        },
-        colors: ["#10B981", "#3B82F6"],
-        title: {
-          text: "Assistance Distribution by Unit",
-          align: "center" as const,
-          style: {
-            fontSize: "16px",
-            fontWeight: "bold",
-            color: "#1F2937",
-          },
-        },
-        legend: {
-          position: "top" as const,
-          horizontalAlign: "center" as const,
-          fontSize: "12px",
-          fontWeight: "500",
-        },
-        tooltip: {
-          shared: true,
-          intersect: false,
-          y: {
-            formatter: (val: number) => `${val} assignments`,
-          },
-        },
-      },
-    }
-  }
-
-  // Assistance Status Distribution
-  const getStatusDistribution = () => {
-    const records = getAllAssistanceRecords
-    if (records.length === 0) {
-      return {
-        series: [],
-        options: {
-          chart: { type: "donut" as const, height: 350 },
-          labels: [],
-          noData: { text: "No data available" },
-        },
-      }
-    }
-
-    const activeCount = records.filter(record => record.isActive).length
-    const completedCount = records.filter(record => !record.isActive).length
-
-    const series = [activeCount, completedCount]
-    const labels = ["Active", "Completed"]
-
-    return {
-      series,
-      options: {
-        chart: {
-          type: "donut" as const,
-          height: 350,
-          events: {
-            dataPointSelection: (_event: any, _chartContext: any, config: any) => {
-              if (config && config.dataPointIndex >= 0) {
-                const status = config.dataPointIndex === 0 ? "active" : "completed"
-                const newStatus = selectedStatus === status ? null : status
-                setSelectedStatus(newStatus)
-                onFilterChange?.({ unit: selectedUnit, status: newStatus, year: selectedYear, employee: selectedEmployee })
-              }
-            },
-          },
-        },
-        labels,
-        colors: ["#10B981", "#3B82F6"],
-        title: {
-          text: "Assistance Status Distribution",
-          align: "center" as const,
-          style: {
-            fontSize: "16px",
-            fontWeight: "bold",
-            color: "#1F2937",
-          },
-        },
-        legend: {
-          position: "bottom" as const,
-          fontSize: "12px",
-          fontWeight: "500",
-        },
-        plotOptions: {
-          pie: {
-            donut: {
-              size: "65%",
-              labels: {
-                show: true,
-                total: {
-                  show: true,
-                  label: "Total",
-                  fontSize: "14px",
-                  fontWeight: "600",
-                  color: "#374151",
-                  formatter: () => records.length.toString(),
-                },
-              },
-            },
-          },
-        },
-        tooltip: {
-          y: {
-            formatter: (val: number) => `${val} assignments (${((val/records.length)*100).toFixed(1)}%)`,
-          },
-        },
-      },
-    }
-  }
-
-  // Assistance Timeline
-  const getAssistanceTimeline = () => {
-    const records = getAllAssistanceRecords
-    if (records.length === 0) {
-      return {
-        series: [{ name: "New Assignments", data: [] }],
-        options: {
-          chart: { type: "area" as const, height: 350 },
-          xaxis: { categories: [] },
-          noData: { text: "No data available" },
-        },
-      }
-    }
-
-    const yearCounts = records.reduce((acc, record) => {
-      if (record.tanggal_masuk) {
-        const [, , year] = record.tanggal_masuk.split("-")
-        acc[year] = (acc[year] || 0) + 1
+    // Hitung perbantuan yang diterima oleh setiap unit
+    const unitAssistanceReceived = filteredAccounts.reduce((acc, account) => {
+      if (Array.isArray(account.account_perbantuan)) {
+        // Filter perbantuan yang masih aktif dulu
+        const activeAssistance = account.account_perbantuan.filter(assistance => {
+          // Jika tanggal_keluar kosong/null = masih aktif
+          if (!assistance.tanggal_keluar || 
+              assistance.tanggal_keluar === '' || 
+              assistance.tanggal_keluar === '0') {
+            return true
+          }
+          
+          try {
+            const dateParts = assistance.tanggal_keluar.split('-')
+            if (dateParts.length !== 3) return true
+            
+            const [day, month, year] = dateParts.map(Number)
+            if (isNaN(day) || isNaN(month) || isNaN(year)) return true
+            
+            const exitDate = new Date(year, month - 1, day)
+            const today = new Date()
+            today.setHours(0, 0, 0, 0)
+            
+            return exitDate >= today
+          } catch (error) {
+            return true
+          }
+        })
+        
+        // Hitung unit penerima perbantuan dari yang masih aktif
+        activeAssistance.forEach(assistance => {
+          const targetUnit = assistance.unit_perbantuan || "Tidak Diketahui"
+          acc[targetUnit] = (acc[targetUnit] || 0) + 1
+        })
       }
       return acc
     }, {} as Record<string, number>)
 
-    const sortedYears = Object.keys(yearCounts).sort()
-    const data = sortedYears.map(year => yearCounts[year])
+    // Gabungkan semua unit yang ada
+    const allUnits = new Set([
+      ...Object.keys(unitEmployeeCounts),
+      ...Object.keys(unitAssistanceGiven),
+      ...Object.keys(unitAssistanceReceived),
+      ...Object.keys(UNIT_WORKFORCE_REQUIREMENTS)
+    ])
 
-    return {
-      series: [{
-        name: "New Assignments",
-        data,
-      }],
-      options: {
-        chart: {
-          type: "area" as const,
-          height: 350,
-          toolbar: { show: false },
-          events: {
-            dataPointSelection: (_event: any, _chartContext: any, config: any) => {
-              if (config && config.dataPointIndex >= 0 && sortedYears[config.dataPointIndex]) {
-                const year = sortedYears[config.dataPointIndex]
-                const newYear = selectedYear === year ? null : year
-                setSelectedYear(newYear)
-                onFilterChange?.({ unit: selectedUnit, status: selectedStatus, year: newYear, employee: selectedEmployee })
-              }
-            },
-          },
-        },
-        dataLabels: {
-          enabled: false,
-        },
-        stroke: {
-          curve: "smooth" as const,
-          width: 3,
-        },
-        fill: {
-          type: "gradient",
-          gradient: {
-            shadeIntensity: 1,
-            opacityFrom: 0.7,
-            opacityTo: 0.3,
-          },
-        },
-        xaxis: {
-          categories: sortedYears,
-          labels: {
-            style: {
-              fontSize: "12px",
-              fontWeight: "500",
-            },
-          },
-        },
-        yaxis: {
-          title: {
-            text: "Number of New Assignments",
-            style: { fontWeight: "600" },
-          },
-        },
-        colors: ["#8B5CF6"],
-        title: {
-          text: "Assistance Assignment Timeline",
-          align: "center" as const,
-          style: {
-            fontSize: "16px",
-            fontWeight: "bold",
-            color: "#1F2937",
-          },
-        },
-        tooltip: {
-          x: {
-            format: "yyyy",
-          },
-          y: {
-            formatter: (val: number) => `${val} new assignments`,
-          },
-        },
-      },
-    }
-  }
-
-  // Most Active Employees
-  const getMostActiveEmployees = () => {
-    const records = getAllAssistanceRecords
-    if (records.length === 0) {
-      return {
-        series: [{ name: "Total Assignments", data: [] }],
-        options: {
-          chart: { type: "bar" as const, height: 350 },
-          xaxis: { categories: [] },
-          noData: { text: "No data available" },
-        },
-      }
-    }
-
-    const employeeCounts = records.reduce((acc, record) => {
-      const name = record.employee_name || "Unknown"
-      acc[name] = acc[name] || { total: 0, active: 0 }
-      acc[name].total++
-      if (record.isActive) {
-        acc[name].active++
-      }
-      return acc
-    }, {} as Record<string, { total: number, active: number }>)
-
-    // Get top 10 most active employees
-    const sortedEmployees = Object.entries(employeeCounts)
-      .sort(([,a], [,b]) => b.total - a.total)
-      .slice(0, 10)
-
-    const categories = sortedEmployees.map(([name]) => name)
-    const totalData = sortedEmployees.map(([, data]) => data.total)
-    const activeData = sortedEmployees.map(([, data]) => data.active)
-
-    return {
-      series: [
-        {
-          name: "Total Assignments",
-          data: totalData,
-        },
-        {
-          name: "Active Assignments",
-          data: activeData,
-        },
-      ],
-      options: {
-        chart: {
-          type: "bar" as const,
-          height: 350,
-          toolbar: { show: false },
-          events: {
-            dataPointSelection: (_event: any, _chartContext: any, config: any) => {
-              if (config && config.dataPointIndex >= 0 && categories[config.dataPointIndex]) {
-                const employee = categories[config.dataPointIndex]
-                const newEmployee = selectedEmployee === employee ? null : employee
-                setSelectedEmployee(newEmployee)
-                onFilterChange?.({ unit: selectedUnit, status: selectedStatus, year: selectedYear, employee: newEmployee })
-              }
-            },
-          },
-        },
-        plotOptions: {
-          bar: {
-            borderRadius: 6,
-            horizontal: true,
-            barHeight: "70%",
-          },
-        },
-        dataLabels: {
-          enabled: true,
-          style: {
-            colors: ["#fff"],
-            fontWeight: "bold",
-          },
-        },
-        xaxis: {
-          categories,
-          labels: {
-            style: {
-              fontSize: "10px",
-              fontWeight: "500",
-            },
-          },
-        },
-        yaxis: {
-          labels: {
-            style: {
-              fontSize: "11px",
-            },
-          },
-        },
-        colors: ["#3B82F6", "#10B981"],
-        title: {
-          text: "Top 10 Most Active Employees",
-          align: "center" as const,
-          style: {
-            fontSize: "16px",
-            fontWeight: "bold",
-            color: "#1F2937",
-          },
-        },
-        legend: {
-          position: "top" as const,
-          horizontalAlign: "center" as const,
-        },
-        tooltip: {
-          shared: true,
-          intersect: false,
-          y: {
-            formatter: (val: number) => `${val} assignments`,
-          },
-        },
-      },
-    }
-  }
-
-  // Average Assignment Duration Chart
-  const getAverageDuration = () => {
-    const records = getAllAssistanceRecords.filter(record => !record.isActive && record.tanggal_keluar && record.tanggal_keluar !== "-")
-    
-    if (records.length === 0) {
-      return {
-        series: [{ name: "Average Duration (Days)", data: [] }],
-        options: {
-          chart: { type: "column" as const, height: 350 },
-          xaxis: { categories: [] },
-          noData: { text: "No completed assignments data" },
-        },
-      }
-    }
-
-    const unitDurations = records.reduce((acc, record) => {
-      const unit = record.unit_perbantuan || "Unknown"
-      const days = daysDifference(record.tanggal_masuk, record.tanggal_keluar)
+    const unitStats = Array.from(allUnits).map(unit => {
+      const actualStaff = unitEmployeeCounts[unit] || 0
+      const requiredStaff = UNIT_WORKFORCE_REQUIREMENTS[unit] || 4
+      const assistanceGiven = unitAssistanceGiven[unit] || 0
+      const assistanceReceived = unitAssistanceReceived[unit] || 0
+      const staffGap = actualStaff - requiredStaff
+      const assistanceRatio = actualStaff > 0 ? assistanceGiven / actualStaff : 0
+      const netAssistance = assistanceGiven - assistanceReceived
       
-      if (!acc[unit]) {
-        acc[unit] = { total: 0, count: 0 }
-      }
-      acc[unit].total += days
-      acc[unit].count++
-      return acc
-    }, {} as Record<string, { total: number, count: number }>)
-
-    const categories = Object.keys(unitDurations)
-    const avgData = categories.map(unit => Math.round(unitDurations[unit].total / unitDurations[unit].count))
-
-    return {
-      series: [{
-        name: "Average Duration (Days)",
-        data: avgData,
-      }],
-      options: {
-        chart: {
-          type: "column" as const,
-          height: 350,
-          toolbar: { show: false },
-        },
-        plotOptions: {
-          bar: {
-            borderRadius: 8,
-            columnWidth: "75%",
-            colors: {
-              ranges: [
-                { from: 0, to: 30, color: "#10B981" },
-                { from: 30, to: 90, color: "#3B82F6" },
-                { from: 90, to: 180, color: "#F59E0B" },
-                { from: 180, to: 1000, color: "#EF4444" }
-              ]
-            }
-          },
-        },
-        dataLabels: {
-          enabled: true,
-          formatter: (val: number) => `${val}d`,
-          style: {
-            colors: ["#fff"],
-            fontWeight: "bold",
-          },
-        },
-        xaxis: {
-          categories,
-          labels: {
-            rotate: -45,
-            style: {
-              fontSize: "11px",
-              fontWeight: "500",
-            },
-          },
-        },
-        yaxis: {
-          title: {
-            text: "Days",
-            style: { fontWeight: "600" },
-          },
-        },
-        title: {
-          text: "Average Assignment Duration by Unit",
-          align: "center" as const,
-          style: {
-            fontSize: "16px",
-            fontWeight: "bold",
-            color: "#1F2937",
-          },
-        },
-        tooltip: {
-          y: {
-            formatter: (val: number) => `${val} days average`,
-          },
-        },
-      },
-    }
-  }
-
-  // Summary Statistics
-  const getSummaryStats = () => {
-    const allRecords = getAllAssistanceRecords
-    const filtered = getFilteredAssistanceRecords
-
-    if (allRecords.length === 0) {
+      // Hitung beban kerja total (staff + assistance given - assistance received)
+      const totalWorkload = actualStaff + assistanceGiven - assistanceReceived
+      const workloadPerStaff = actualStaff > 0 ? totalWorkload / actualStaff : 0
+      
       return {
-        totalAssignments: 0,
-        activeAssignments: 0,
-        completedAssignments: 0,
-        uniqueUnits: 0,
-        uniqueEmployees: 0,
-        avgDuration: 0,
+        unit,
+        actualStaff,
+        requiredStaff,
+        staffGap,
+        assistanceGiven,
+        assistanceReceived,
+        netAssistance,
+        assistanceRatio,
+        workloadPerStaff,
+        efficiency: actualStaff > 0 ? (requiredStaff / actualStaff) * 100 : 0,
+        isOverloaded: workloadPerStaff > 1.5,
+        isUnderstaffed: staffGap < 0,
+        canProvideHelp: staffGap > 0 && assistanceRatio < 0.5
+      }
+    }).sort((a, b) => b.actualStaff - a.actualStaff)
+
+    // Klasifikasi unit
+    const criticalUnits = unitStats.filter(unit => unit.isUnderstaffed && unit.workloadPerStaff > 1.2)
+    const efficientUnits = unitStats.filter(unit => !unit.isUnderstaffed && unit.workloadPerStaff < 1.2 && unit.assistanceGiven > 0)
+    const overloadedUnits = unitStats.filter(unit => unit.isOverloaded)
+
+    return {
+      unitStats,
+      totalAssignments: Object.values(unitAssistanceGiven).reduce((sum, count) => sum + count, 0),
+      criticalUnits,
+      efficientUnits,
+      overloadedUnits
+    }
+  }, [filteredAccounts])
+
+  const analysis = getUnitWorkforceAnalysis
+
+  // Summary metrics
+  const summaryMetrics = useMemo(() => {
+    const stats = analysis.unitStats
+    if (stats.length === 0) {
+      return {
+        totalUnits: 0,
+        totalStaff: 0,
+        totalRequired: 0,
+        avgWorkload: 0,
+        staffUtilization: 0,
+        assistanceEfficiency: 0
       }
     }
 
-    const activeCount = allRecords.filter(record => record.isActive).length
-    const completedCount = allRecords.length - activeCount
+    const totalStaff = stats.reduce((sum, unit) => sum + unit.actualStaff, 0)
+    const totalRequired = stats.reduce((sum, unit) => sum + unit.requiredStaff, 0)
+    const avgWorkload = stats.reduce((sum, unit) => sum + unit.workloadPerStaff, 0) / stats.length
+    const totalAssistanceGiven = stats.reduce((sum, unit) => sum + unit.assistanceGiven, 0)
+    const totalAssistanceReceived = stats.reduce((sum, unit) => sum + unit.assistanceReceived, 0)
     
-    const uniqueUnits = new Set(allRecords.map(record => record.unit_perbantuan)).size
-    const uniqueEmployees = new Set(allRecords.map(record => record.employee_name)).size
-
-    // Calculate average duration for completed assignments
-    const completedRecords = allRecords.filter(record => !record.isActive && record.tanggal_keluar && record.tanggal_keluar !== "-")
-    const avgDuration = completedRecords.length > 0 
-      ? Math.round(completedRecords.reduce((sum, record) => 
-          sum + daysDifference(record.tanggal_masuk, record.tanggal_keluar), 0) / completedRecords.length)
-      : 0
-
     return {
-      totalAssignments: filtered.length,
-      activeAssignments: activeCount,
-      completedAssignments: completedCount,
-      uniqueUnits,
-      uniqueEmployees,
-      avgDuration,
+      totalUnits: stats.length,
+      totalStaff,
+      totalRequired,
+      avgWorkload,
+      staffUtilization: totalRequired > 0 ? (totalStaff / totalRequired) * 100 : 0,
+      assistanceEfficiency: totalAssistanceReceived > 0 ? (totalAssistanceGiven / totalAssistanceReceived) * 100 : 100
     }
-  }
-
-  const stats = getSummaryStats()
-
-  const clearFilters = () => {
-    setSelectedUnit(null)
-    setSelectedStatus(null)
-    setSelectedYear(null)
-    setSelectedEmployee(null)
-    onFilterChange?.({ unit: null, status: null, year: null, employee: null })
-  }
+  }, [analysis.unitStats])
 
   return (
     <div className="space-y-6">
-      {/* Filter Status and Clear Button */}
-      {(selectedUnit || selectedStatus || selectedYear || selectedEmployee) && (
-        <Card className="border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm font-semibold text-blue-800">Active Filters:</span>
-                {selectedUnit && (
-                  <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-200 transition-colors">
-                    <Building className="w-3 h-3 mr-1" />
-                    {selectedUnit}
-                  </Badge>
-                )}
-                {selectedStatus && (
-                  <Badge variant="secondary" className="bg-green-100 text-green-800 hover:bg-green-200 transition-colors">
-                    <Activity className="w-3 h-3 mr-1" />
-                    {selectedStatus}
-                  </Badge>
-                )}
-                {selectedYear && (
-                  <Badge variant="secondary" className="bg-purple-100 text-purple-800 hover:bg-purple-200 transition-colors">
-                    <Calendar className="w-3 h-3 mr-1" />
-                    {selectedYear}
-                  </Badge>
-                )}
-                {selectedEmployee && (
-                  <Badge variant="secondary" className="bg-orange-100 text-orange-800 hover:bg-orange-200 transition-colors">
-                    <Users className="w-3 h-3 mr-1" />
-                    {selectedEmployee}
-                  </Badge>
-                )}
-              </div>
-              <Button
-                onClick={clearFilters}
-                variant="outline"
-                size="sm"
-                className="hover:bg-blue-100 transition-colors bg-transparent"
-              >
-                Clear All Filters
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+      {/* <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="hover:shadow-lg transition-all duration-300 hover:scale-105 bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-blue-700">Total Assignments</p>
-                <p className="text-2xl font-bold text-blue-600">{stats.totalAssignments}</p>
-                <p className="text-xs text-blue-600 mt-1">All time</p>
+                <p className="text-sm font-medium text-blue-700">Total Unit Kerja</p>
+                <p className="text-2xl font-bold text-blue-600">{summaryMetrics.totalUnits}</p>
+                <p className="text-xs text-blue-600 mt-1">Unit aktif</p>
               </div>
-              <Heart className="w-8 h-8 text-blue-600" />
+              <Building className="w-8 h-8 text-blue-600" />
             </div>
           </CardContent>
         </Card>
@@ -706,258 +218,277 @@ export default function AssistanceAnalytics({
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-green-700">Active</p>
-                <p className="text-2xl font-bold text-green-600">{stats.activeAssignments}</p>
-                <p className="text-xs text-green-600 mt-1">Ongoing</p>
+                <p className="text-sm font-medium text-green-700">Utilizasi SDM</p>
+                <p className="text-2xl font-bold text-green-600">{summaryMetrics.staffUtilization.toFixed(1)}%</p>
+                <p className="text-xs text-green-600 mt-1">{summaryMetrics.totalStaff}/{summaryMetrics.totalRequired} staff</p>
               </div>
-              <Activity className="w-8 h-8 text-green-600" />
+              <Users className="w-8 h-8 text-green-600" />
             </div>
           </CardContent>
         </Card>
 
-        <Card className="hover:shadow-lg transition-all duration-300 hover:scale-105 bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-purple-700">Completed</p>
-                <p className="text-2xl font-bold text-purple-600">{stats.completedAssignments}</p>
-                <p className="text-xs text-purple-600 mt-1">Finished</p>
-              </div>
-              <CheckCircle className="w-8 h-8 text-purple-600" />
-            </div>
-          </CardContent>
-        </Card>
 
-        <Card className="hover:shadow-lg transition-all duration-300 hover:scale-105 bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-orange-700">Units Involved</p>
-                <p className="text-2xl font-bold text-orange-600">{stats.uniqueUnits}</p>
-                <p className="text-xs text-orange-600 mt-1">Different units</p>
-              </div>
-              <Building className="w-8 h-8 text-orange-600" />
-            </div>
-          </CardContent>
-        </Card>
+      
+      </div> */}
 
-        <Card className="hover:shadow-lg transition-all duration-300 hover:scale-105 bg-gradient-to-br from-pink-50 to-pink-100 border-pink-200">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-pink-700">Employees</p>
-                <p className="text-2xl font-bold text-pink-600">{stats.uniqueEmployees}</p>
-                <p className="text-xs text-pink-600 mt-1">Participated</p>
-              </div>
-              <Users className="w-8 h-8 text-pink-600" />
-            </div>
-          </CardContent>
-        </Card>
+      {/* Unit Analysis Table */}
+      <Card className="bg-gradient-to-r from-white to-gray-50 border-gray-200">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <BarChart3 className="w-5 h-5 text-gray-600" />
+            Analisis Detail Unit Kerja
+          </CardTitle>
+          <CardDescription>
+            Perbandingan kebutuhan vs aktual staff, beban perbantuan, dan efisiensi operasional per unit
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="border-b-2 border-gray-200">
+                  <th className="text-left p-3 font-semibold text-gray-700">Unit Kerja</th>
+                  <th className="text-center p-3 font-semibold text-gray-700">Staff</th>
+                  <th className="text-center p-3 font-semibold text-gray-700">Kebutuhan</th>
+                  <th className="text-center p-3 font-semibold text-gray-700">Gap</th>
+                  <th className="text-center p-3 font-semibold text-gray-700">Bantuan Diberikan</th>
+                  <th className="text-center p-3 font-semibold text-gray-700">Bantuan Diterima</th>
+                  {/* <th className="text-center p-3 font-semibold text-gray-700">Beban Kerja</th> */}
+                  <th className="text-center p-3 font-semibold text-gray-700">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {analysis.unitStats.map((unit, index) => (
+                  <tr key={unit.unit} className={`border-b ${index % 2 === 0 ? 'bg-gray-50' : 'bg-white'} hover:bg-blue-50 transition-colors`}>
+                    <td className="p-3 font-medium text-gray-800">
+                      {unit.unit}
+                    </td>
+                    <td className="p-3 text-center">
+                      <span className={`font-bold ${unit.actualStaff < unit.requiredStaff ? 'text-red-600' : 'text-green-600'}`}>
+                        {unit.actualStaff}
+                      </span>
+                    </td>
+                    <td className="p-3 text-center text-gray-600">
+                      {unit.requiredStaff}
+                    </td>
+                    <td className="p-3 text-center">
+                      <span className={`font-bold ${unit.staffGap < 0 ? 'text-red-600' : unit.staffGap > 0 ? 'text-green-600' : 'text-gray-600'}`}>
+                        {unit.staffGap > 0 ? '+' : ''}{unit.staffGap}
+                      </span>
+                    </td>
+                    <td className="p-3 text-center">
+                      <span className="text-blue-600 font-medium">{unit.assistanceGiven}</span>
+                    </td>
+                    <td className="p-3 text-center">
+                      <span className="text-purple-600 font-medium">{unit.assistanceReceived}</span>
+                    </td>
+                    {/* <td className="p-3 text-center">
+                      <span className={`font-bold ${unit.workloadPerStaff > 1.5 ? 'text-red-600' : unit.workloadPerStaff > 1.2 ? 'text-orange-600' : 'text-green-600'}`}>
+                        {unit.workloadPerStaff.toFixed(1)}x
+                      </span>
+                    </td> */}
+                    <td className="p-3 text-center">
+                      <div className="flex flex-wrap gap-1 justify-center">
+                        {unit.isUnderstaffed && (
+                          <Badge variant="destructive" className="text-xs">
+                            Kurang Staff
+                          </Badge>
+                        )}
+                        {unit.isOverloaded && (
+                          <Badge variant="destructive" className="text-xs">
+                            Overload
+                          </Badge>
+                        )}
+                        {unit.canProvideHelp && (
+                          <Badge variant="default" className="text-xs bg-green-100 text-green-800">
+                            Dapat Bantu
+                          </Badge>
+                        )}
+                        {!unit.isUnderstaffed && !unit.isOverloaded && (
+                          <Badge variant="outline" className="text-xs text-green-600 border-green-600">
+                            Normal
+                          </Badge>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
 
-        <Card className="hover:shadow-lg transition-all duration-300 hover:scale-105 bg-gradient-to-br from-indigo-50 to-indigo-100 border-indigo-200">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-indigo-700">Avg Duration</p>
-                <p className="text-2xl font-bold text-indigo-600">{stats.avgDuration}</p>
-                <p className="text-xs text-indigo-600 mt-1">Days</p>
-              </div>
-              <Clock className="w-8 h-8 text-indigo-600" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Charts Grid */}
+      {/* Visual Analysis Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Assistance by Unit */}
-        <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-blue-50 border-blue-200">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <BarChart3 className="w-5 h-5 text-blue-600" />
-              Assistance by Unit
+        {/* Staff Gap Analysis */}
+        <Card className="bg-gradient-to-br from-white to-red-50 border-red-200">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-red-700">
+              <UserX className="w-5 h-5" />
+              Gap Analisis SDM
             </CardTitle>
-            <CardDescription className="text-sm">
-              Distribution of assistance assignments across work units. Green=Active, Blue=Completed.
+            <CardDescription>
+              Perbandingan kebutuhan vs ketersediaan staff per unit
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Chart
-              options={getAssistanceByUnit().options}
-              series={getAssistanceByUnit().series}
-              type="bar"
-              height={350}
-            />
+            <div className="space-y-4">
+              {analysis.unitStats.slice(0, 8).map((unit) => (
+                <div key={unit.unit} className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium text-gray-700 truncate max-w-32">{unit.unit}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500">{unit.actualStaff}/{unit.requiredStaff}</span>
+                      <span className={`text-xs font-bold ${unit.staffGap < 0 ? 'text-red-600' : unit.staffGap > 0 ? 'text-green-600' : 'text-gray-600'}`}>
+                        ({unit.staffGap > 0 ? '+' : ''}{unit.staffGap})
+                      </span>
+                    </div>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-3 relative overflow-hidden">
+                    <div
+                      className={`h-3 rounded-full transition-all duration-300 ${
+                        unit.actualStaff < unit.requiredStaff 
+                          ? 'bg-gradient-to-r from-red-400 to-red-500' 
+                          : unit.actualStaff === unit.requiredStaff 
+                            ? 'bg-gradient-to-r from-green-400 to-green-500'
+                            : 'bg-gradient-to-r from-blue-400 to-blue-500'
+                      }`}
+                      style={{ 
+                        width: `${Math.min((unit.actualStaff / unit.requiredStaff) * 100, 100)}%` 
+                      }}
+                    />
+                    {unit.actualStaff > unit.requiredStaff && (
+                      <div 
+                        className="absolute top-0 left-full h-3 bg-gradient-to-r from-blue-300 to-blue-400 opacity-70"
+                        style={{ 
+                          width: `${((unit.actualStaff - unit.requiredStaff) / unit.requiredStaff) * 100}%` 
+                        }}
+                      />
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
           </CardContent>
         </Card>
 
-        {/* Status Distribution */}
-        <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-green-50 border-green-200">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Activity className="w-5 h-5 text-green-600" />
-              Assignment Status
-            </CardTitle>
-            <CardDescription className="text-sm">
-              Overall status distribution of assistance assignments. Click to filter.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Chart
-              options={getStatusDistribution().options}
-              series={getStatusDistribution().series}
-              type="donut"
-              height={350}
-            />
-          </CardContent>
-        </Card>
-
-        {/* Assistance Timeline */}
-        <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-purple-50 border-purple-200">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Calendar className="w-5 h-5 text-purple-600" />
-              Assignment Timeline
-            </CardTitle>
-            <CardDescription className="text-sm">
-              New assistance assignments over time. Shows demand patterns.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Chart
-              options={getAssistanceTimeline().options}
-              series={getAssistanceTimeline().series}
-              type="area"
-              height={350}
-            />
-          </CardContent>
-        </Card>
-
-        {/* Most Active Employees */}
-        <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-orange-50 border-orange-200">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <TrendingUp className="w-5 h-5 text-orange-600" />
-              Most Active Employees
-            </CardTitle>
-            <CardDescription className="text-sm">
-              Top 10 employees by assistance assignments. Blue=Total, Green=Active.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Chart
-              options={getMostActiveEmployees().options}
-              series={getMostActiveEmployees().series}
-              type="bar"
-              height={350}
-            />
-          </CardContent>
-        </Card>
-
-        {/* Average Duration */}
-        <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-indigo-50 border-indigo-200 lg:col-span-2">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Clock className="w-5 h-5 text-indigo-600" />
-              Average Assignment Duration
-            </CardTitle>
-            <CardDescription className="text-sm">
-              Average duration of completed assignments by unit. Green=Short (&lt;30d), Blue=Medium (30-90d), Yellow=Long (90-180d), Red=Very Long (&gt;180d).
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Chart
-              options={getAverageDuration().options}
-              series={getAverageDuration().series}
-              type="bar"
-              height={350}
-            />
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Insights Card */}
-      <Card className="bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200">
+           {/* Recommendations */}
+      <Card className="bg-gradient-to-r from-amber-50 to-yellow-50 border-amber-200">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-amber-800">
-            <AlertTriangle className="w-5 h-5" />
-            Key Insights & Recommendations
+            <TrendingUp className="w-5 h-5" />
+            Rekomendasi Strategis
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-3">
-              <div className="flex items-start gap-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full mt-2 flex-shrink-0"></div>
-                <div>
-                  <p className="font-semibold text-green-700">Active Assignments</p>
-                  <p className="text-sm text-gray-600">
-                    {stats.activeAssignments} assignments are currently active. Monitor workload distribution to ensure no single unit is overwhelmed.
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start gap-2">
-                <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
-                <div>
-                  <p className="font-semibold text-blue-700">Completion Rate</p>
-                  <p className="text-sm text-gray-600">
-                    {stats.completedAssignments > 0 ? 
-                      `${((stats.completedAssignments / (stats.activeAssignments + stats.completedAssignments)) * 100).toFixed(1)}% completion rate indicates ${
-                        (stats.completedAssignments / (stats.activeAssignments + stats.completedAssignments)) > 0.7 ? 'efficient' : 'slow'
-                      } assignment processing.` 
-                      : 'No completed assignments yet to analyze completion patterns.'
-                    }
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start gap-2">
-                <div className="w-2 h-2 bg-purple-500 rounded-full mt-2 flex-shrink-0"></div>
-                <div>
-                  <p className="font-semibold text-purple-700">Employee Participation</p>
-                  <p className="text-sm text-gray-600">
-                    {stats.uniqueEmployees} employees have participated in assistance programs, showing {
-                      stats.uniqueEmployees > 10 ? 'broad organizational engagement' : 'limited participation that may need expansion'
-                    }.
-                  </p>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="space-y-4">
+             
+
+              <div>
+                <h4 className="font-semibold text-blue-700 mb-2">Optimasi Resource</h4>
+                <div className="space-y-2 text-sm">
+                  {analysis.unitStats
+                    .filter(unit => unit.canProvideHelp)
+                    .slice(0, 3)
+                    .map((unit) => (
+                      <div key={unit.unit} className="p-2 bg-blue-50 border border-blue-200 rounded">
+                        <p className="font-medium text-blue-700">{unit.unit}</p>
+                        <p className="text-xs text-blue-600">
+                          Surplus {unit.staffGap} staff, dapat memberikan lebih banyak bantuan
+                        </p>
+                      </div>
+                    ))}
                 </div>
               </div>
             </div>
-            <div className="space-y-3">
-              <div className="flex items-start gap-2">
-                <div className="w-2 h-2 bg-orange-500 rounded-full mt-2 flex-shrink-0"></div>
-                <div>
-                  <p className="font-semibold text-orange-700">Duration Analysis</p>
-                  <p className="text-sm text-gray-600">
-                    Average assignment duration of {stats.avgDuration} days suggests {
-                      stats.avgDuration < 60 ? 'short-term, focused assistance' : 
-                      stats.avgDuration < 120 ? 'medium-term support requirements' : 
-                      'long-term assignments that may need review'
-                    }.
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start gap-2">
-                <div className="w-2 h-2 bg-red-500 rounded-full mt-2 flex-shrink-0"></div>
-                <div>
-                  <p className="font-semibold text-red-700">Resource Optimization</p>
-                  <p className="text-sm text-gray-600">
-                    Monitor units with longest average durations for potential process improvements. Consider standardizing successful short-duration practices across units.
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start gap-2">
-                <div className="w-2 h-2 bg-indigo-500 rounded-full mt-2 flex-shrink-0"></div>
-                <div>
-                  <p className="font-semibold text-indigo-700">Strategic Planning</p>
-                  <p className="text-sm text-gray-600">
-                    Track assignment patterns to predict future support needs and allocate resources proactively. Most active employees should mentor others to build capacity.
-                  </p>
-                </div>
+
+            <div className="space-y-4">
+            
+              <div>
+                <h4 className="font-semibold text-purple-700 mb-2">Action Items</h4>
+                <ul className="text-sm space-y-1 text-purple-700">
+                  <li>• Redistribusi staff dari unit surplus ke unit deficit</li>
+                  <li>• Review struktur organisasi untuk kebutuhan aktual</li>
+                  <li>• Monitor workload secara berkala</li>
+                  <li>• Standardisasi proses di unit efisien</li>
+                </ul>
               </div>
             </div>
           </div>
         </CardContent>
       </Card>
+
+    
+      </div>
+
+      {/* Assistance Flow Analysis */}
+      <Card className="bg-gradient-to-r from-indigo-50 to-purple-50 border-indigo-200">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-indigo-700">
+            <ArrowRightLeft className="w-5 h-5" />
+            Alur Perbantuan Antar Unit
+          </CardTitle>
+          <CardDescription>
+            Analisis pemberi dan penerima bantuan untuk optimasi resource sharing
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Top Providers */}
+            <div>
+              <h4 className="font-semibold text-green-700 mb-3 flex items-center gap-2">
+                <UserCheck className="w-4 h-4" />
+                Top Pemberi Bantuan
+              </h4>
+              <div className="space-y-2">
+                {analysis.unitStats
+                  .sort((a, b) => b.assistanceGiven - a.assistanceGiven)
+                  .slice(0, 5)
+                  .map((unit, index) => (
+                    <div key={unit.unit} className="flex items-center justify-between p-2 bg-green-50 rounded border border-green-100">
+                      <div className="flex items-center gap-2">
+                        <span className="w-6 h-6 bg-green-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
+                          {index + 1}
+                        </span>
+                        <span className="text-sm font-medium text-green-800 truncate max-w-24">{unit.unit}</span>
+                      </div>
+                      <span className="text-sm font-bold text-green-600">{unit.assistanceGiven}</span>
+                    </div>
+                  ))}
+              </div>
+            </div>
+
+            {/* Top Recipients */}
+            <div>
+              <h4 className="font-semibold text-blue-700 mb-3 flex items-center gap-2">
+                <Users className="w-4 h-4" />
+                Top Penerima Bantuan
+              </h4>
+              <div className="space-y-2">
+                {analysis.unitStats
+                  .sort((a, b) => b.assistanceReceived - a.assistanceReceived)
+                  .slice(0, 5)
+                  .map((unit, index) => (
+                    <div key={unit.unit} className="flex items-center justify-between p-2 bg-blue-50 rounded border border-blue-100">
+                      <div className="flex items-center gap-2">
+                        <span className="w-6 h-6 bg-blue-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
+                          {index + 1}
+                        </span>
+                        <span className="text-sm font-medium text-blue-800 truncate max-w-24">{unit.unit}</span>
+                      </div>
+                      <span className="text-sm font-bold text-blue-600">{unit.assistanceReceived}</span>
+                    </div>
+                  ))}
+              </div>
+            </div>
+
+          
+          </div>
+        </CardContent>
+      </Card>
+
     </div>
   )
 }

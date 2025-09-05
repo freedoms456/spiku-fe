@@ -15,7 +15,7 @@ interface TrainingAnalyticsProps {
   onFilterChange?: (filters: any) => void
 }
 
-export default function TrainingAnalytics({
+export default function AnalitikPelatihan({
   filteredAccounts: propFilteredAccounts = [],
   onFilterChange,
 }: TrainingAnalyticsProps) {
@@ -24,7 +24,7 @@ export default function TrainingAnalytics({
   const [selectedJPRange, setSelectedJPRange] = useState<string | null>(null)
   const [selectedDiklatName, setSelectedDiklatName] = useState<string | null>(null)
 
-  // Get filtered training data based on selections
+  // Mendapatkan data pelatihan yang telah difilter berdasarkan pilihan
   const getFilteredAccounts = useMemo(() => {
     let filtered = propFilteredAccounts
   
@@ -32,16 +32,15 @@ export default function TrainingAnalytics({
     const diklatList = filtered.flatMap((account) =>
       (account.account_diklat || []).map((diklat) => ({
         ...diklat,
-        account_name: account.account_name, // ikut sertakan nama account
+        account_name: account.account_name, // ikut sertakan nama akun
       }))
     )
   
     return diklatList
   }, [propFilteredAccounts, selectedYear, selectedTrainingType, selectedJPRange])
 
-
   const getDiklatDistribution = () => {
-    // group by dengan reduce
+    // kelompokkan dengan reduce
     const grouped: Record<string, Set<number>> = getFilteredAccounts.reduce((acc, item) => {
       if (!acc[item.name]) {
         acc[item.name] = new Set()
@@ -50,13 +49,13 @@ export default function TrainingAnalytics({
       return acc
     }, {} as Record<string, Set<number>>)
   
-    // ubah ke array {name, total}, lalu sort & ambil 10
+    // ubah ke array {name, total}, lalu urutkan & ambil 10
     const counts = Object.entries(grouped)
       .map(([name, set]) => ({
         name,
         total: set.size,
       }))
-      .sort((a, b) => b.total - a.total) // urut dari terbesar ke terkecil
+      .sort((a, b) => b.total - a.total) // urutkan dari terbesar ke terkecil
       .slice(0, 10) // ambil maksimal 10
   
     return {
@@ -87,8 +86,7 @@ export default function TrainingAnalytics({
     }
   }
   
-  
-  // Training Hours per Employee Chart
+  // Grafik Jam Pelatihan per Pegawai
   const getTrainingHoursPerEmployee = () => {
     if (!getFilteredAccounts || getFilteredAccounts.length === 0) {
       return {
@@ -96,13 +94,13 @@ export default function TrainingAnalytics({
         options: {
           chart: { type: "bar" as const, height: 350 },
           xaxis: { categories: [] },
-          noData: { text: "No training data available" },
+          noData: { text: "Tidak ada data pelatihan tersedia" },
         },
       }
     }
 
     const employeeHours = getFilteredAccounts.reduce((acc, training) => {
-      const name = training.account_name || "Unknown"
+      const name = training.account_name || "Tidak Diketahui"
       const jp = Number(training.jp) || 0
       acc[name] = (acc[name] || 0) + jp
       return acc
@@ -110,13 +108,13 @@ export default function TrainingAnalytics({
 
     const sortedEmployees = Object.entries(employeeHours)
       .sort(([,a], [,b]) => b - a)
-      .slice(0, 15) // Top 15 employees
+      .slice(0, 15) // 15 pegawai teratas
 
     const categories = sortedEmployees.map(([name]) => name)
     const data = sortedEmployees.map(([, hours]) => hours)
 
     return {
-      series: [{ name: "Training Hours (JP)", data }],
+      series: [{ name: "Jam Pelatihan (JP)", data }],
       options: {
         chart: {
           type: "bar" as const,
@@ -144,11 +142,11 @@ export default function TrainingAnalytics({
           },
         },
         yaxis: {
-          title: { text: "Training Hours (JP)", style: { fontWeight: "600" } },
+          title: { text: "Jam Pelatihan (JP)", style: { fontWeight: "600" } },
         },
         colors: ["#3B82F6"],
         title: {
-          text: "Top Training Hours by Employee",
+          text: "Jam Pelatihan Tertinggi per Pegawai",
           align: "center" as const,
           style: { fontSize: "16px", fontWeight: "bold", color: "#1F2937" },
         },
@@ -161,7 +159,7 @@ export default function TrainingAnalytics({
     }
   }
 
-  // Training Types Distribution
+  // Distribusi Jenis Pelatihan
   const getTrainingTypesDistribution = () => {
     if (!getFilteredAccounts || getFilteredAccounts.length === 0) {
       return {
@@ -169,7 +167,7 @@ export default function TrainingAnalytics({
         options: {
           chart: { type: "donut" as const, height: 350 },
           labels: [],
-          noData: { text: "No training data available" },
+          noData: { text: "Tidak ada data pelatihan tersedia" },
         },
       }
     }
@@ -177,7 +175,7 @@ export default function TrainingAnalytics({
     const typeCounts = getFilteredAccounts.reduce((acc, training) => {
       const key = `${training.name}&&${training.jenis}`
       if (!acc._seen.has(key)) {
-        const type = training.jenis || "Unknown"
+        const type = training.jenis || "Tidak Diketahui"
         acc.counts[type] = (acc.counts[type] || 0) + 1
         acc._seen.add(key)
       }
@@ -207,7 +205,7 @@ export default function TrainingAnalytics({
         labels,
         colors: ["#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899", "#06B6D4"],
         title: {
-          text: "Training Types Distribution",
+          text: "Distribusi Jenis Pelatihan",
           align: "center" as const,
           style: { fontSize: "16px", fontWeight: "bold", color: "#1F2937" },
         },
@@ -230,12 +228,12 @@ export default function TrainingAnalytics({
             },
           },
         },
-        tooltip: { y: { formatter: (val: number) => `${val} trainings` }, theme: "light" },
+        tooltip: { y: { formatter: (val: number) => `${val} pelatihan` }, theme: "light" },
       },
     }
   }
 
-  // Yearly Training Trend
+  // Tren Pelatihan Tahunan
   const getYearlyTrainingTrend = () => {
     if (!getFilteredAccounts || getFilteredAccounts.length === 0) {
       return {
@@ -243,13 +241,13 @@ export default function TrainingAnalytics({
         options: {
           chart: { type: "line" as const, height: 350 },
           xaxis: { categories: [] },
-          noData: { text: "No training data available" },
+          noData: { text: "Tidak ada data pelatihan tersedia" },
         },
       }
     }
 
     const yearlyData = getFilteredAccounts.reduce((acc, training) => {
-      const year = training.tahun || "Unknown"
+      const year = training.tahun || "Tidak Diketahui"
       const jp = Number(training.jp) || 0
       if (!acc[year]) acc[year] = { count: 0, totalJP: 0 }
       acc[year].count += 1
@@ -263,8 +261,8 @@ export default function TrainingAnalytics({
 
     return {
         series: [
-          { name: "Number of Trainings", data: trainingsData, type: "column" },
-          { name: "Total JP Hours", data: jpData, type: "line" }
+          { name: "Jumlah Pelatihan", data: trainingsData, type: "column" },
+          { name: "Total Jam JP", data: jpData, type: "line" }
         ],
         options: {
           chart: {
@@ -295,18 +293,18 @@ export default function TrainingAnalytics({
           },
           yaxis: [
             {
-              title: { text: "Number of Trainings", style: { fontWeight: "600" } },
-              seriesName: "Number of Trainings"
+              title: { text: "Jumlah Pelatihan", style: { fontWeight: "600" } },
+              seriesName: "Jumlah Pelatihan"
             },
             {
               opposite: true,
-              title: { text: "Total JP Hours", style: { fontWeight: "600" } },
-              seriesName: "Total JP Hours"
+              title: { text: "Total Jam JP", style: { fontWeight: "600" } },
+              seriesName: "Total Jam JP"
             }
           ],
           colors: ["#3B82F6", "#10B981"],
           title: {
-            text: "Training Trends Over Years",
+            text: "Tren Pelatihan Sepanjang Tahun",
             align: "center" as const,
             style: { fontSize: "16px", fontWeight: "bold", color: "#1F2937" },
           },
@@ -316,7 +314,7 @@ export default function TrainingAnalytics({
     }
   }
 
-  // Training Hours Distribution
+  // Distribusi Jam Pelatihan
   const getTrainingHoursDistribution = () => {
     if (!getFilteredAccounts || getFilteredAccounts.length === 0) {
       return {
@@ -324,7 +322,7 @@ export default function TrainingAnalytics({
         options: {
           chart: { type: "histogram" as const, height: 350 },
           xaxis: { categories: [] },
-          noData: { text: "No training data available" },
+          noData: { text: "Tidak ada data pelatihan tersedia" },
         },
       }
     }
@@ -352,7 +350,7 @@ export default function TrainingAnalytics({
     const data = Object.values(jpRanges)
 
     return {
-      series: [{ name: "Training Count", data }],
+      series: [{ name: "Jumlah Pelatihan", data }],
       options: {
         chart: {
           type: "bar" as const,
@@ -378,21 +376,21 @@ export default function TrainingAnalytics({
           labels: { style: { fontSize: "11px", fontWeight: "500" } }
         },
         yaxis: {
-          title: { text: "Number of Trainings", style: { fontWeight: "600" } }
+          title: { text: "Jumlah Pelatihan", style: { fontWeight: "600" } }
         },
         colors: ["#F59E0B"],
         title: {
-          text: "Training Hours Distribution",
+          text: "Distribusi Jam Pelatihan",
           align: "center" as const,
           style: { fontSize: "16px", fontWeight: "bold", color: "#1F2937" },
         },
-        tooltip: { y: { formatter: (val: number) => `${val} trainings` }, theme: "light" },
+        tooltip: { y: { formatter: (val: number) => `${val} pelatihan` }, theme: "light" },
         grid: { borderColor: "#E5E7EB", strokeDashArray: 3 },
       },
     }
   }
 
-  // Summary Statistics
+  // Statistik Ringkasan
   const getSummaryStats = () => {
     if (!getFilteredAccounts || getFilteredAccounts.length === 0) {
       return {
@@ -401,8 +399,8 @@ export default function TrainingAnalytics({
         averageJP: 0,
         uniqueEmployees: 0,
         trainingTypes: 0,
-        mostActiveYear: "N/A",
-        topTrainingType: "N/A"
+        mostActiveYear: "Tidak Ada",
+        topTrainingType: "Tidak Ada"
       }
     }
 
@@ -414,21 +412,21 @@ export default function TrainingAnalytics({
     const uniqueEmployees = new Set(getFilteredAccounts.map(t => t.employeeId)).size
     const trainingTypes = new Set(getFilteredAccounts.map(t => t.jenis)).size
 
-    // Most active year
+    // Tahun paling aktif
     const yearCounts = getFilteredAccounts.reduce((acc, training) => {
-      const year = training.tahun || "Unknown"
+      const year = training.tahun || "Tidak Diketahui"
       acc[year] = (acc[year] || 0) + 1
       return acc
     }, {} as Record<string, number>)
-    const mostActiveYear = Object.entries(yearCounts).sort(([,a], [,b]) => b - a)[0]?.[0] || "N/A"
+    const mostActiveYear = Object.entries(yearCounts).sort(([,a], [,b]) => b - a)[0]?.[0] || "Tidak Ada"
 
-    // Top training type
+    // Jenis pelatihan teratas
     const typeCounts = getFilteredAccounts.reduce((acc, training) => {
-      const type = training.jenis || "Unknown"
+      const type = training.jenis || "Tidak Diketahui"
       acc[type] = (acc[type] || 0) + 1
       return acc
     }, {} as Record<string, number>)
-    const topTrainingType = Object.entries(typeCounts).sort(([,a], [,b]) => b - a)[0]?.[0] || "N/A"
+    const topTrainingType = Object.entries(typeCounts).sort(([,a], [,b]) => b - a)[0]?.[0] || "Tidak Ada"
 
     return {
       totalTrainings,
@@ -451,21 +449,19 @@ export default function TrainingAnalytics({
     onFilterChange?.({ employee: null, location: null, relation: null })
   }
 
-
   return (
     <div className="space-y-6">
-      {/* Filter Status and Clear Button */}
-   
+      {/* Status Filter dan Tombol Hapus */}
 
-      {/* Summary Cards */}
+      {/* Kartu Ringkasan */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="hover:shadow-lg transition-all duration-300 hover:scale-105 bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-blue-700">Total Trainings</p>
+                <p className="text-sm font-medium text-blue-700">Total Pelatihan</p>
                 <p className="text-2xl font-bold text-blue-600">{stats.totalTrainings}</p>
-                <p className="text-xs text-blue-600 mt-1">{stats.uniqueEmployees} employees</p>
+                <p className="text-xs text-blue-600 mt-1">{stats.uniqueEmployees} pegawai</p>
               </div>
               <Award className="w-8 h-8 text-blue-600" />
             </div>
@@ -476,9 +472,9 @@ export default function TrainingAnalytics({
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-green-700">Total JP Hours</p>
+                <p className="text-sm font-medium text-green-700">Total Jam JP</p>
                 <p className="text-2xl font-bold text-green-600">{stats.totalJP}</p>
-                <p className="text-xs text-green-600 mt-1">Avg: {stats.averageJP} JP</p>
+                <p className="text-xs text-green-600 mt-1">Rata-rata: {stats.averageJP} JP</p>
               </div>
               <Clock className="w-8 h-8 text-green-600" />
             </div>
@@ -489,9 +485,9 @@ export default function TrainingAnalytics({
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-purple-700">Training Types</p>
+                <p className="text-sm font-medium text-purple-700">Jenis Pelatihan</p>
                 <p className="text-2xl font-bold text-purple-600">{stats.trainingTypes}</p>
-                <p className="text-xs text-purple-600 mt-1">Most: {stats.topTrainingType.length > 15 ? stats.topTrainingType.substring(0, 15) + '...' : stats.topTrainingType}</p>
+                <p className="text-xs text-purple-600 mt-1">Terbanyak: {stats.topTrainingType.length > 15 ? stats.topTrainingType.substring(0, 15) + '...' : stats.topTrainingType}</p>
               </div>
               <BookOpen className="w-8 h-8 text-purple-600" />
             </div>
@@ -502,9 +498,9 @@ export default function TrainingAnalytics({
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-orange-700">Most Active Year</p>
+                <p className="text-sm font-medium text-orange-700">Tahun Paling Aktif</p>
                 <p className="text-2xl font-bold text-orange-600">{stats.mostActiveYear}</p>
-                <p className="text-xs text-orange-600 mt-1">Peak activity</p>
+                <p className="text-xs text-orange-600 mt-1">Aktivitas puncak</p>
               </div>
               <TrendingUp className="w-8 h-8 text-orange-600" />
             </div>
@@ -512,7 +508,7 @@ export default function TrainingAnalytics({
         </Card>
       </div>
 
-      {/* Charts Grid */}
+      {/* Grid Grafik */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
  
         <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-orange-50 border-orange-200">
@@ -522,7 +518,7 @@ export default function TrainingAnalytics({
               Distribusi Diklat Yang Diikuti Pegawai
             </CardTitle>
             <CardDescription className="text-sm">
-             Klik Untuk Lihat Pegawi yang mengikuti
+              Klik untuk melihat pegawai yang mengikuti
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -535,15 +531,15 @@ export default function TrainingAnalytics({
           </CardContent>
         </Card>
 
-        {/* Training Types Distribution */}
+        {/* Distribusi Jenis Pelatihan */}
         <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-green-50 border-green-200">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
               <BookOpen className="w-5 h-5 text-green-600" />
-              Training Types Distribution
+              Distribusi Jenis Pelatihan
             </CardTitle>
             <CardDescription className="text-sm">
-              Click segments to filter by training type. Shows distribution of different training categories.
+              Klik segmen untuk filter berdasarkan jenis pelatihan. Menampilkan distribusi kategori pelatihan yang berbeda.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -556,15 +552,15 @@ export default function TrainingAnalytics({
           </CardContent>
         </Card>
 
-        {/* Yearly Training Trend */}
+        {/* Tren Pelatihan Tahunan */}
         <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-indigo-50 border-indigo-200">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
               <TrendingUp className="w-5 h-5 text-indigo-600" />
-              Training Trends Over Years
+              Tren Pelatihan Sepanjang Tahun
             </CardTitle>
             <CardDescription className="text-sm">
-              Click data points to filter by year. Shows training activity trends and total JP hours.
+              Klik titik data untuk filter berdasarkan tahun. Menampilkan tren aktivitas pelatihan dan total jam JP.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -577,15 +573,15 @@ export default function TrainingAnalytics({
           </CardContent>
         </Card>
 
-        {/* Training Hours Distribution */}
+        {/* Distribusi Jam Pelatihan */}
         <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-orange-50 border-orange-200">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Clock className="w-5 h-5 text-orange-600" />
-              Training Hours Distribution
+              Distribusi Jam Pelatihan
             </CardTitle>
             <CardDescription className="text-sm">
-              Click bars to filter by JP range. Shows how training hours are distributed across different ranges.
+              Klik batang untuk filter berdasarkan rentang JP. Menampilkan bagaimana jam pelatihan didistribusikan di berbagai rentang.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -598,17 +594,16 @@ export default function TrainingAnalytics({
           </CardContent>
         </Card>
 
-
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-1 gap-6">
         <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-blue-50 border-blue-200">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
               <BarChart3 className="w-5 h-5 text-blue-600" />
-              Top Training Hours by Employee
+              Jam Pelatihan Tertinggi per Pegawai
             </CardTitle>
             <CardDescription className="text-sm">
-              Employees with the most training hours (JP). Shows top 15 performers.
+              Pegawai dengan jam pelatihan terbanyak (JP). Menampilkan 15 performa teratas.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -622,7 +617,7 @@ export default function TrainingAnalytics({
         </Card>
       </div>
 
-      {/* Training Insights */}
+      {/* Wawasan Pelatihan */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
           <CardContent className="p-4">
@@ -631,9 +626,9 @@ export default function TrainingAnalytics({
                 <CheckCircle className="w-5 h-5 text-green-600" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-green-800">High Performers</p>
+                <p className="text-sm font-semibold text-green-800">Performa Tinggi</p>
                 <p className="text-xs text-green-700">
-                  {Math.round((stats.uniqueEmployees / propFilteredAccounts.length) * 100)}% of employees have completed trainings
+                  {Math.round((stats.uniqueEmployees / propFilteredAccounts.length) * 100)}% pegawai telah menyelesaikan pelatihan
                 </p>
               </div>
             </div>
@@ -647,9 +642,9 @@ export default function TrainingAnalytics({
                 <Star className="w-5 h-5 text-blue-600" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-blue-800">Training Diversity</p>
+                <p className="text-sm font-semibold text-blue-800">Keberagaman Pelatihan</p>
                 <p className="text-xs text-blue-700">
-                  {stats.trainingTypes} different types of training programs available
+                  {stats.trainingTypes} jenis program pelatihan yang berbeda tersedia
                 </p>
               </div>
             </div>
@@ -663,16 +658,14 @@ export default function TrainingAnalytics({
                 <AlertTriangle className="w-5 h-5 text-orange-600" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-orange-800">Training Investment</p>
+                <p className="text-sm font-semibold text-orange-800">Investasi Pelatihan</p>
                 <p className="text-xs text-orange-700">
-                  {stats.averageJP} JP average per training shows commitment to development
+                  Rata-rata {stats.averageJP} JP per pelatihan menunjukkan komitmen untuk pengembangan
                 </p>
               </div>
             </div>
           </CardContent>
         </Card>
-
-        
       </div>
     </div>
   )

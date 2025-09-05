@@ -37,16 +37,23 @@ export default function Navbar({ onGlobalSearch, searchQuery = "" , showSearchBa
     <nav className="bg-white border-b border-gray-200 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
-          {/* Logo and Brand */}
-          <div className="flex items-center">
-            <div className="flex-shrink-0 flex items-center">
-              <Database className="h-8 w-8 text-blue-600" />
-              <div className="ml-3">
-                <h1 className="text-xl font-bold text-gray-900"></h1>
-                <p className="text-xs text-gray-500">SPIKU</p>
-              </div>
+       {/* Logo and Brand */}
+        <div className="flex items-center">
+          <a href="/homepage">
+          <div className="flex-shrink-0 flex items-center">
+            <img
+              src="/logo.png"
+              alt="Logo"
+              width={50}
+              height={50}
+              className="h-15 w-15 object-contain"
+            />
+            <div className="ml-3">
+              <h1 className="text-xl font-bold text-gray-900">SPIKU</h1>
             </div>
           </div>
+          </a>
+        </div>
 
           {/* Search Bar , true menampilkan, false engga*/}
           {showSearchBar && (

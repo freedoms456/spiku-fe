@@ -14,7 +14,7 @@ interface JabatanAnalyticsProps {
   onFilterChange?: (filters: any) => void
 }
 
-export default function JabatanAnalytics({
+export default function AnalitikJabatan({
   filteredAccounts: propFilteredAccounts,
   onFilterChange,
 }: JabatanAnalyticsProps = {}) {
@@ -23,31 +23,56 @@ export default function JabatanAnalytics({
   const [selectedPeriod, setSelectedPeriod] = useState<string | null>(null)
  
 
-  // Calculate duration in months
-  const calculateDurationInMonths = (startDate, endDate = null) => {
-    const start = startDate
-    ? new Date(startDate.split('-').reverse().join('-'))
-    : new Date()
-  
-  const end = endDate
-    ? new Date(endDate.split('-').reverse().join('-'))
-    : new Date()
-  
+  // Menghitung durasi dalam bulan (dioptimalkan dengan error handling)
+  const calculateDurationInMonths = useMemo(() => {
+    const durationCache = new Map<string, number>()
     
-    const months = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth())
-    return Math.max(0, months)
-  }
+    return (startDate: string, endDate: string | null = null): number => {
+      const cacheKey = `${startDate}-${endDate || 'current'}`
+      
+      if (durationCache.has(cacheKey)) {
+        return durationCache.get(cacheKey)!
+      }
+      
+      try {
+        if (!startDate) return 0
+        
+        // Parse format dd-mm-yyyy
+        const startParts = startDate.split('-')
+        if (startParts.length !== 3) return 0
+        
+        const start = new Date(startParts[2], parseInt(startParts[1]) - 1, parseInt(startParts[0]))
+        if (isNaN(start.getTime())) return 0
+        
+        let end: Date
+        if (endDate) {
+          const endParts = endDate.split('-')
+          if (endParts.length !== 3) return 0
+          end = new Date(endParts[2], parseInt(endParts[1]) - 1, parseInt(endParts[0]))
+          if (isNaN(end.getTime())) return 0
+        } else {
+          end = new Date()
+        }
+        
+        const months = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth())
+        const result = Math.max(0, months)
+        
+        durationCache.set(cacheKey, result)
+        return result
+      } catch (error) {
+        console.warn('Error calculating duration:', error)
+        return 0
+      }
+    }
+  }, [])
 
-  // Get filtered accounts
+  // Mendapatkan akun yang telah difilter (dioptimalkan)
   const getFilteredAccounts = useMemo(() => {
-    let filtered = propFilteredAccounts
+    return propFilteredAccounts || []
+  }, [propFilteredAccounts, selectedEmployee, selectedJabatan, selectedPeriod])
 
-
-    return filtered
-  }, [propFilteredAccounts,selectedEmployee, selectedJabatan, selectedPeriod])
-
-  // Jabatan Distribution Chart
-  const getJabatanDistribution = () => {
+  // Distribusi Jabatan (dioptimalkan)
+  const getJabatanDistribution = useMemo(() => {
     const accounts = getFilteredAccounts
 
     if (!accounts || accounts.length === 0) {
@@ -56,30 +81,34 @@ export default function JabatanAnalytics({
         options: {
           chart: { type: "bar" as const, height: 350 },
           xaxis: { categories: [] },
-          noData: { text: "No data available" },
+          noData: { text: "Tidak ada data tersedia" },
         },
       }
     }
 
     // Hitung distribusi jabatan aktif dari data terfilter
-    const jabatanCounts = getFilteredAccounts.reduce((acc, account) => {
-    if (Array.isArray(account.account_jabatan)) {
-      // Ambil jabatan terbaru (aktif)
-      const latestJabatan = [...(account.account_jabatan || [])]
-        .filter(jab => jab?.awal_menjabat) // 🚨 buang data yang null/undefined
-        .sort((a, b) => {
-          const dateA = new Date(a.awal_menjabat.split('-').reverse().join('-'))
-          const dateB = new Date(b.awal_menjabat.split('-').reverse().join('-'))
-          return dateB.getTime() - dateA.getTime()
-        })[0]
+    const jabatanCounts = accounts.reduce((acc, account) => {
+      if (Array.isArray(account.account_jabatan)) {
+        // Ambil jabatan terbaru (aktif)
+        const latestJabatan = [...(account.account_jabatan || [])]
+          .filter(jab => jab?.awal_menjabat) // buang data yang null/undefined
+          .sort((a, b) => {
+            try {
+              const dateA = new Date(a.awal_menjabat.split('-').reverse().join('-'))
+              const dateB = new Date(b.awal_menjabat.split('-').reverse().join('-'))
+              return dateB.getTime() - dateA.getTime()
+            } catch {
+              return 0
+            }
+          })[0]
   
-      if (latestJabatan && !latestJabatan.akhir_menjabat) {
-        const jabatanName = latestJabatan.name || "Unknown"
-        acc[jabatanName] = (acc[jabatanName] || 0) + 1
+        if (latestJabatan && !latestJabatan.akhir_menjabat) {
+          const jabatanName = latestJabatan.name || "Tidak Diketahui"
+          acc[jabatanName] = (acc[jabatanName] || 0) + 1
+        }
       }
-    }
-    return acc
-  }, {} as Record<string, number>)
+      return acc
+    }, {} as Record<string, number>)
 
     const categories = Object.keys(jabatanCounts)
     const data = Object.values(jabatanCounts)
@@ -87,7 +116,7 @@ export default function JabatanAnalytics({
     return {
       series: [
         {
-          name: "Active Positions",
+          name: "Jabatan Aktif",
           data,
         },
       ],
@@ -134,7 +163,7 @@ export default function JabatanAnalytics({
         },
         yaxis: {
           title: {
-            text: "Number of Employees",
+            text: "Jumlah Pegawai",
             style: {
               fontWeight: "600",
             },
@@ -142,7 +171,7 @@ export default function JabatanAnalytics({
         },
         colors: ["#3B82F6"],
         title: {
-          text: "Current Position Distribution",
+          text: "Distribusi Jabatan Saat Ini",
           align: "center" as const,
           style: {
             fontSize: "16px",
@@ -152,7 +181,7 @@ export default function JabatanAnalytics({
         },
         tooltip: {
           y: {
-            formatter: (val: number) => `${val} employees`,
+            formatter: (val: number) => `${val} pegawai`,
           },
           theme: "light",
         },
@@ -162,10 +191,10 @@ export default function JabatanAnalytics({
         },
       },
     }
-  }
+  }, [getFilteredAccounts, selectedJabatan, selectedEmployee, selectedPeriod, onFilterChange])
 
-  // Career Progression Analysis
-  const getCareerProgression = () => {
+  // Analisis Progres Karir (dioptimalkan)
+  const getCareerProgression = useMemo(() => {
     const accounts = getFilteredAccounts
     if (!accounts || accounts.length === 0) {
       return {
@@ -173,39 +202,61 @@ export default function JabatanAnalytics({
         options: {
           chart: { type: "line" as const, height: 350 },
           xaxis: { categories: [] },
-          noData: { text: "No data available" },
+          noData: { text: "Tidak ada data tersedia" },
         },
       }
     }
 
-    // Analisis pergerakan jabatan per bulan
+    // Analisis pergerakan jabatan per bulan (dioptimalkan)
     const monthlyMovements = accounts.flatMap(account => 
-      (account.account_jabatan || []).map(jab => {
-        const date = new Date(jab.awal_menjabat.split('-').reverse().join('-'))
-        return {
-          month: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`,
-          type: 'appointment'
-        }
-      })
+      (account.account_jabatan || [])
+        .filter(jab => jab?.awal_menjabat)
+        .map(jab => {
+          try {
+            const [day, month, year] = jab.awal_menjabat.split("-")
+            const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day))
+            
+            if (isNaN(date.getTime())) return null
+            
+            return {
+              month: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`,
+              type: 'appointment' as const
+            }
+          } catch {
+            return null
+          }
+        })
+        .filter(Boolean)
     ).concat(
       accounts.flatMap(account => 
         (account.account_jabatan || [])
-          .filter(jab => jab.akhir_menjabat)
+          .filter(jab => jab?.akhir_menjabat)
           .map(jab => {
-            const date = new Date(jab.akhir_menjabat.split('-').reverse().join('-'))
-            return {
-              month: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`,
-              type: 'termination'
+            try {
+              const [day, month, year] = jab.akhir_menjabat.split("-")
+              const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day))
+              
+              if (isNaN(date.getTime())) return null
+              
+              return {
+                month: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`,
+                type: 'termination' as const
+              }
+            } catch {
+              return null
             }
           })
+          .filter(Boolean)
       )
     )
 
     const movementsByMonth = monthlyMovements.reduce((acc, movement) => {
-      if (!acc[movement.month]) {
-        acc[movement.month] = { appointments: 0, terminations: 0 }
+      if (movement) {
+        if (!acc[movement.month]) {
+          acc[movement.month] = { appointments: 0, terminations: 0 }
+        }
+        acc[movement.month][movement.type === 'appointment' ? 'appointments' : 'terminations']++
       }
-      acc[movement.month][movement.type === 'appointment' ? 'appointments' : 'terminations']++
       return acc
     }, {} as Record<string, { appointments: number; terminations: number }>)
 
@@ -216,11 +267,11 @@ export default function JabatanAnalytics({
     return {
       series: [
         {
-          name: "New Appointments",
+          name: "Pengangkatan Baru",
           data: appointmentsData,
         },
         {
-          name: "Position Changes",
+          name: "Perubahan Jabatan",
           data: terminationsData,
         }
       ],
@@ -248,7 +299,7 @@ export default function JabatanAnalytics({
         },
         yaxis: {
           title: {
-            text: "Number of Changes",
+            text: "Jumlah Perubahan",
             style: {
               fontWeight: "600",
             },
@@ -256,7 +307,7 @@ export default function JabatanAnalytics({
         },
         colors: ["#10B981", "#F59E0B"],
         title: {
-          text: "Career Movement Trends",
+          text: "Tren Pergerakan Karir",
           align: "center" as const,
           style: {
             fontSize: "16px",
@@ -269,8 +320,9 @@ export default function JabatanAnalytics({
           horizontalAlign: "center" as const,
         },
         tooltip: {
-          shared: true,
-          intersect: false,
+          y: {
+            formatter: (val: number) => `${val} pengangkatan`,
+          },
           theme: "light",
         },
         grid: {
@@ -279,23 +331,23 @@ export default function JabatanAnalytics({
         },
       },
     }
-  }
+  }, [getFilteredAccounts])
 
-  // Tenure Analysis
-  const getTenureAnalysis = () => {
+  // Analisis Masa Jabatan (dioptimalkan)
+  const getTenureAnalysis = useMemo(() => {
     const accounts = getFilteredAccounts
     if (!accounts || accounts.length === 0) {
       return {
-        series: [{ name: "Employees", data: [] }],
+        series: [{ name: "Pegawai", data: [] }],
         options: {
           chart: { type: "column" as const, height: 350 },
           xaxis: { categories: [] },
-          noData: { text: "No data available" },
+          noData: { text: "Tidak ada data tersedia" },
         },
       }
     }
 
-    // Analisis masa jabatan current positions
+    // Analisis masa jabatan untuk posisi aktif
     const tenureData = accounts
       .map(account => {
         if (!Array.isArray(account.account_jabatan) || account.account_jabatan.length === 0) {
@@ -303,10 +355,17 @@ export default function JabatanAnalytics({
         }
         
         // Ambil jabatan terbaru (aktif)
-        const latestJabatan = [...account.account_jabatan].sort(
-          (a, b) => new Date(b.awal_menjabat.split('-').reverse().join('-')).getTime() - 
-                    new Date(a.awal_menjabat.split('-').reverse().join('-')).getTime()
-        )[0]
+        const latestJabatan = [...account.account_jabatan]
+          .filter(jab => jab?.awal_menjabat)
+          .sort((a, b) => {
+            try {
+              const dateA = new Date(a.awal_menjabat.split('-').reverse().join('-'))
+              const dateB = new Date(b.awal_menjabat.split('-').reverse().join('-'))
+              return dateB.getTime() - dateA.getTime()
+            } catch {
+              return 0
+            }
+          })[0]
 
         if (latestJabatan && !latestJabatan.akhir_menjabat) {
           const tenure = calculateDurationInMonths(latestJabatan.awal_menjabat)
@@ -320,28 +379,28 @@ export default function JabatanAnalytics({
       })
       .filter(Boolean)
 
-    // Group by tenure ranges
+    // Kelompokkan berdasarkan rentang masa jabatan
     const tenureRanges = {
-      "0-6 months": 0,
-      "6-12 months": 0,
-      "1-2 years": 0,
-      "2-3 years": 0,
-      "3+ years": 0,
+      "0-6 bulan": 0,
+      "6-12 bulan": 0,
+      "1-2 tahun": 0,
+      "2-3 tahun": 0,
+      "3+ tahun": 0,
     }
 
     tenureData.forEach(item => {
-      const months = item.tenure
-      if (months <= 6) tenureRanges["0-6 months"]++
-      else if (months <= 12) tenureRanges["6-12 months"]++
-      else if (months <= 24) tenureRanges["1-2 years"]++
-      else if (months <= 36) tenureRanges["2-3 years"]++
-      else tenureRanges["3+ years"]++
+      const months = item?.tenure || 0
+      if (months <= 6) tenureRanges["0-6 bulan"]++
+      else if (months <= 12) tenureRanges["6-12 bulan"]++
+      else if (months <= 24) tenureRanges["1-2 tahun"]++
+      else if (months <= 36) tenureRanges["2-3 tahun"]++
+      else tenureRanges["3+ tahun"]++
     })
 
     return {
       series: [
         {
-          name: "Employees",
+          name: "Pegawai",
           data: Object.values(tenureRanges),
         },
       ],
@@ -376,7 +435,7 @@ export default function JabatanAnalytics({
         },
         yaxis: {
           title: {
-            text: "Number of Employees",
+            text: "Jumlah Pegawai",
             style: {
               fontWeight: "600",
             },
@@ -384,7 +443,7 @@ export default function JabatanAnalytics({
         },
         colors: ["#8B5CF6"],
         title: {
-          text: "Current Position Tenure Analysis",
+          text: "Analisis Masa Jabatan Saat Ini",
           align: "center" as const,
           style: {
             fontSize: "16px",
@@ -394,7 +453,7 @@ export default function JabatanAnalytics({
         },
         tooltip: {
           y: {
-            formatter: (val: number) => `${val} employees`,
+            formatter: (val: number) => `${val} pegawai`,
           },
           theme: "light",
         },
@@ -404,10 +463,10 @@ export default function JabatanAnalytics({
         },
       },
     }
-  }
+  }, [getFilteredAccounts, calculateDurationInMonths])
 
-  // Unit Distribution
-  const getUnitDistribution = () => {
+  // Distribusi Unit (dioptimalkan)
+  const getUnitDistribution = useMemo(() => {
     const accounts = getFilteredAccounts
     if (!accounts || accounts.length === 0) {
       return {
@@ -415,13 +474,13 @@ export default function JabatanAnalytics({
         options: {
           chart: { type: "donut" as const, height: 350 },
           labels: [],
-          noData: { text: "No data available" },
+          noData: { text: "Tidak ada data tersedia" },
         },
       }
     }
 
     const unitCounts = accounts.reduce((acc, account) => {
-      const unit = account.account_unit || "Unknown"
+      const unit = account.account_unit || "Tidak Diketahui"
       acc[unit] = (acc[unit] || 0) + 1
       return acc
     }, {} as Record<string, number>)
@@ -440,7 +499,7 @@ export default function JabatanAnalytics({
         labels,
         colors: ["#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899"],
         title: {
-          text: "Distribution by Organizational Unit",
+          text: "Distribusi berdasarkan Unit Organisasi",
           align: "center" as const,
           style: {
             fontSize: "16px",
@@ -478,16 +537,16 @@ export default function JabatanAnalytics({
         },
         tooltip: {
           y: {
-            formatter: (val: number) => `${val} employees`,
+            formatter: (val: number) => `${val} pegawai`,
           },
           theme: "light",
         },
       },
     }
-  }
+  }, [getFilteredAccounts])
 
-  // Employee Jabatan Timeline
-  const getEmployeeJabatanTimeline = () => {
+  // Timeline Jabatan Pegawai (dioptimalkan)
+  const getEmployeeJabatanTimeline = useMemo(() => {
     const accounts = getFilteredAccounts
     if (!accounts || accounts.length === 0) {
       return {
@@ -495,7 +554,7 @@ export default function JabatanAnalytics({
         options: {
           chart: { type: "bar" as const, height: 350 },
           xaxis: { categories: [] },
-          noData: { text: "No data available" },
+          noData: { text: "Tidak ada data tersedia" },
         },
       }
     }
@@ -505,7 +564,7 @@ export default function JabatanAnalytics({
       const activeJabatan = account.account_jabatan?.filter(jab => !jab.akhir_menjabat).length || 0
       
       return {
-        name: account.account_name || "Unknown",
+        name: account.account_name || "Tidak Diketahui",
         total: totalJabatan,
         active: activeJabatan
       }
@@ -518,11 +577,11 @@ export default function JabatanAnalytics({
     return {
       series: [
         {
-          name: "Total Positions",
+          name: "Total Jabatan",
           data: totalData,
         },
         {
-          name: "Active Positions",
+          name: "Jabatan Aktif",
           data: activeData,
         },
       ],
@@ -531,7 +590,6 @@ export default function JabatanAnalytics({
           type: "bar" as const,
           height: 350,
           toolbar: { show: false },
-         
         },
         plotOptions: {
           bar: {
@@ -555,7 +613,7 @@ export default function JabatanAnalytics({
         },
         yaxis: {
           title: {
-            text: "Number of Positions",
+            text: "Jumlah Jabatan",
             style: {
               fontWeight: "600",
             },
@@ -563,7 +621,7 @@ export default function JabatanAnalytics({
         },
         colors: ["#3B82F6", "#10B981"],
         title: {
-          text: "Employee Position History",
+          text: "Riwayat Jabatan Pegawai",
           align: "center" as const,
           style: {
             fontSize: "16px",
@@ -588,10 +646,10 @@ export default function JabatanAnalytics({
         },
       },
     }
-  }
+  }, [getFilteredAccounts])
 
-  // Appointment Trends Over Time
-  const getAppointmentTrends = () => {
+  // Tren Pengangkatan Sepanjang Waktu (dioptimalkan)
+  const getAppointmentTrends = useMemo(() => {
     const accounts = getFilteredAccounts
     if (!accounts || accounts.length === 0) {
       return {
@@ -599,30 +657,36 @@ export default function JabatanAnalytics({
         options: {
           chart: { type: "area" as const, height: 350 },
           xaxis: { categories: [] },
-          noData: { text: "No data available" },
+          noData: { text: "Tidak ada data tersedia" },
         },
       }
     }
 
-    // Group appointments by year-month
+    // Kelompokkan pengangkatan berdasarkan tahun-bulan
     const appointmentsByMonth = accounts
-    .flatMap(account =>
-      (account.account_jabatan || [])
-        .filter(jab => jab?.awal_menjabat) // ✅ skip null/undefined/kosong
-        .map(jab => {
-          const [day, month, year] = jab.awal_menjabat.split("-")
-          const date = new Date(`${year}-${month}-${day}`)
-  
-          if (isNaN(date.getTime())) return null // ✅ skip invalid date
-  
-          return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
-        })
-        .filter(Boolean) // ✅ buang null hasil dari invalid date
-    )
-    .reduce((acc, month) => {
-      acc[month] = (acc[month] || 0) + 1
-      return acc
-    }, {} as Record<string, number>)
+      .flatMap(account =>
+        (account.account_jabatan || [])
+          .filter(jab => jab?.awal_menjabat)
+          .map(jab => {
+            try {
+              const [day, month, year] = jab.awal_menjabat.split("-")
+              const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day))
+              
+              if (isNaN(date.getTime())) return null
+              
+              return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
+            } catch {
+              return null
+            }
+          })
+          .filter(Boolean)
+      )
+      .reduce((acc, month) => {
+        if (month) {
+          acc[month] = (acc[month] || 0) + 1
+        }
+        return acc
+      }, {} as Record<string, number>)
 
     const sortedMonths = Object.keys(appointmentsByMonth).sort()
     const data = sortedMonths.map(month => appointmentsByMonth[month])
@@ -630,7 +694,7 @@ export default function JabatanAnalytics({
     return {
       series: [
         {
-          name: "New Appointments",
+          name: "Pengangkatan Baru",
           data,
         },
       ],
@@ -666,7 +730,7 @@ export default function JabatanAnalytics({
         },
         yaxis: {
           title: {
-            text: "Number of Appointments",
+            text: "Jumlah Pengangkatan",
             style: {
               fontWeight: "600",
             },
@@ -674,7 +738,7 @@ export default function JabatanAnalytics({
         },
         colors: ["#F59E0B"],
         title: {
-          text: "Appointment Trends Over Time",
+          text: "Tren Pengangkatan Sepanjang Waktu",
           align: "center" as const,
           style: {
             fontSize: "16px",
@@ -684,7 +748,7 @@ export default function JabatanAnalytics({
         },
         tooltip: {
           y: {
-            formatter: (val: number) => `${val} appointments`,
+            formatter: (val: number) => `${val} pengangkatan`,
           },
           theme: "light",
         },
@@ -694,10 +758,10 @@ export default function JabatanAnalytics({
         },
       },
     }
-  }
+  }, [getFilteredAccounts])
 
-  // Average Tenure by Position
-  const getAverageTenureByPosition = () => {
+  // Rata-rata Masa Jabatan berdasarkan Posisi (dioptimalkan)
+  const getAverageTenureByPosition = useMemo(() => {
     const accounts = getFilteredAccounts
     if (!accounts || accounts.length === 0) {
       return {
@@ -705,16 +769,18 @@ export default function JabatanAnalytics({
         options: {
           chart: { type: "bar" as const, height: 350 },
           xaxis: { categories: [] },
-          noData: { text: "No data available" },
+          noData: { text: "Tidak ada data tersedia" },
         },
       }
     }
 
     const tenureByPosition = accounts.flatMap(account =>
-      (account.account_jabatan || []).map(jab => ({
-        position: jab.name,
-        tenure: calculateDurationInMonths(jab.awal_menjabat, jab.akhir_menjabat)
-      }))
+      (account.account_jabatan || [])
+        .filter(jab => jab?.awal_menjabat)
+        .map(jab => ({
+          position: jab.name || "Tidak Diketahui",
+          tenure: calculateDurationInMonths(jab.awal_menjabat, jab.akhir_menjabat)
+        }))
     ).reduce((acc, item) => {
       if (!acc[item.position]) {
         acc[item.position] = { total: 0, count: 0 }
@@ -724,11 +790,14 @@ export default function JabatanAnalytics({
       return acc
     }, {} as Record<string, { total: number; count: number }>)
 
-    const positionAverages = Object.entries(tenureByPosition).map(([position, data]) => ({
-      position: position.length > 15 ? position.substring(0, 15) + '...' : position,
-      fullPosition: position,
-      avgTenure: Math.round(data.total / data.count)
-    }))
+    const positionAverages = Object.entries(tenureByPosition)
+      .map(([position, data]) => ({
+        position: position.length > 15 ? position.substring(0, 15) + '...' : position,
+        fullPosition: position,
+        avgTenure: data.count > 0 ? Math.round(data.total / data.count) : 0
+      }))
+      .sort((a, b) => b.avgTenure - a.avgTenure)
+      .slice(0, 10)
 
     const categories = positionAverages.map(item => item.position)
     const data = positionAverages.map(item => item.avgTenure)
@@ -736,7 +805,7 @@ export default function JabatanAnalytics({
     return {
       series: [
         {
-          name: "Average Tenure (Months)",
+          name: "Rata-rata Masa Jabatan (Bulan)",
           data,
         },
       ],
@@ -755,7 +824,7 @@ export default function JabatanAnalytics({
         },
         dataLabels: {
           enabled: true,
-          formatter: (val: number) => `${val}m`,
+          formatter: (val: number) => `${val}b`,
           style: {
             colors: ["#fff"],
             fontSize: "11px",
@@ -773,7 +842,7 @@ export default function JabatanAnalytics({
         },
         yaxis: {
           title: {
-            text: "Positions",
+            text: "Jabatan",
             style: {
               fontWeight: "600",
             },
@@ -781,7 +850,7 @@ export default function JabatanAnalytics({
         },
         colors: ["#EF4444"],
         title: {
-          text: "Average Tenure by Position",
+          text: "Rata-rata Masa Jabatan berdasarkan Posisi",
           align: "center" as const,
           style: {
             fontSize: "16px",
@@ -791,7 +860,7 @@ export default function JabatanAnalytics({
         },
         tooltip: {
           y: {
-            formatter: (val: number) => `${val} months average`,
+            formatter: (val: number) => `${val} bulan rata-rata`,
           },
           theme: "light",
         },
@@ -801,10 +870,10 @@ export default function JabatanAnalytics({
         },
       },
     }
-  }
+  }, [getFilteredAccounts, calculateDurationInMonths])
 
-  // Position Level Analysis
-  const getPositionLevelAnalysis = () => {
+  // Analisis Level Jabatan (dioptimalkan)
+  const getPositionLevelAnalysis = useMemo(() => {
     const accounts = getFilteredAccounts
     if (!accounts || accounts.length === 0) {
       return {
@@ -812,7 +881,7 @@ export default function JabatanAnalytics({
         options: {
           chart: { type: "donut" as const, height: 350 },
           labels: [],
-          noData: { text: "No data available" },
+          noData: { text: "Tidak ada data tersedia" },
         },
       }
     }
@@ -821,25 +890,29 @@ export default function JabatanAnalytics({
     const levelCounts = accounts.reduce((acc, account) => {
       if (Array.isArray(account.account_jabatan)) {
         const latestJabatan = [...account.account_jabatan]
-        .filter(jab => jab?.awal_menjabat) // 🚨 pastikan tidak null/undefined
-        .sort((a, b) => {
-          const dateA = new Date(a.awal_menjabat.split('-').reverse().join('-'))
-          const dateB = new Date(b.awal_menjabat.split('-').reverse().join('-'))
-          return dateB - dateA
-        })[0]
+          .filter(jab => jab?.awal_menjabat)
+          .sort((a, b) => {
+            try {
+              const dateA = new Date(a.awal_menjabat.split('-').reverse().join('-'))
+              const dateB = new Date(b.awal_menjabat.split('-').reverse().join('-'))
+              return dateB.getTime() - dateA.getTime()
+            } catch {
+              return 0
+            }
+          })[0]
         
         if (latestJabatan && !latestJabatan.akhir_menjabat) {
-            let level = "Staff"
-            const name = latestJabatan.name.toLowerCase()
-          
-            if (name.includes("kepal")) {
-              level = "Struktural"
-            } else if (["ahli", "pertama", "muda", "madya","terampil","pemeriksa"].some(k => name.includes(k))) {
-              level = "Fungsional"
-            } 
-          
-            acc[level] = (acc[level] || 0) + 1
-          }
+          let level = "Staf"
+          const name = latestJabatan.name.toLowerCase()
+        
+          if (name.includes("kepala")) {
+            level = "Struktural"
+          } else if (["ahli", "pertama", "muda", "madya", "terampil", "pemeriksa"].some(k => name.includes(k))) {
+            level = "Fungsional"
+          } 
+        
+          acc[level] = (acc[level] || 0) + 1
+        }
       }
       return acc
     }, {} as Record<string, number>)
@@ -857,7 +930,7 @@ export default function JabatanAnalytics({
           events: {
             dataPointSelection: (event: any, chartContext: any, config: any) => {
               if (config && config.dataPointIndex >= 0 && labels[config.dataPointIndex]) {
-                const employeeLevel = labels[config.dataPointIndex] // ambil nama level dari labels
+                const employeeLevel = labels[config.dataPointIndex]
                 const newEmployee = selectedEmployee === employeeLevel ? null : employeeLevel
           
                 setSelectedPeriod(newEmployee)
@@ -873,7 +946,7 @@ export default function JabatanAnalytics({
         labels,
         colors: ["#EF4444", "#F59E0B", "#10B981", "#3B82F6", "#8B5CF6"],
         title: {
-          text: "Position Level Distribution",
+          text: "Distribusi Level Jabatan",
           align: "center" as const,
           style: {
             fontSize: "16px",
@@ -911,25 +984,16 @@ export default function JabatanAnalytics({
         },
         tooltip: {
           y: {
-            formatter: (val: number) => `${val} employees`,
+            formatter: (val: number) => `${val} pegawai`,
           },
           theme: "light",
         },
       },
     }
-  }
+  }, [getFilteredAccounts, selectedEmployee, selectedJabatan, selectedPeriod, onFilterChange])
 
-  // Calculate duration in months
-  const calculateDurationInMonthss = (startDate, endDate = null) => {
-    const start = new Date(startDate.split('-').reverse().join('-'))
-    const end = endDate ? new Date(endDate.split('-').reverse().join('-')) : new Date()
-    
-    const months = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth())
-    return Math.max(0, months)
-  }
-
-  // Summary Statistics
-  const getSummaryStats = () => {
+  // Statistik Ringkasan (dioptimalkan dengan memoization)
+  const getSummaryStats = useMemo(() => {
     const accounts = getFilteredAccounts
     if (!accounts || accounts.length === 0) {
       return {
@@ -949,28 +1013,31 @@ export default function JabatanAnalytics({
     const totalPositions = allJabatan.length
     const activePositions = allJabatan.filter(jab => !jab.akhir_menjabat).length
     
-    const uniquePositions = new Set(allJabatan.map(jab => jab.name)).size
+    const uniquePositions = new Set(allJabatan.map(jab => jab.name).filter(Boolean)).size
     const uniqueUnits = new Set(accounts.map(acc => acc.account_unit).filter(Boolean)).size
     
     const positionChanges = accounts.filter(acc => 
       (acc.account_jabatan?.length || 0) > 1
     ).length
 
-    // Calculate average tenure for active positions
+    // Hitung rata-rata masa jabatan untuk posisi aktif
     const activeTenures = accounts
-    .map(account => {
-      const latestJabatan = account.account_jabatan
-        ?.filter(jab => jab && jab.awal_menjabat && !jab.akhir_menjabat) // ✅ pastikan tidak null
-        ?.sort((a, b) => {
-          const dateA = new Date(a.awal_menjabat.split('-').reverse().join('-'))
-          const dateB = new Date(b.awal_menjabat.split('-').reverse().join('-'))
-          return dateB - dateA
-        })[0]
-  
-      return latestJabatan ? calculateDurationInMonths(latestJabatan.awal_menjabat) : 0
-    })
-    .filter(tenure => tenure > 0)
-  
+      .map(account => {
+        const latestJabatan = account.account_jabatan
+          ?.filter(jab => jab?.awal_menjabat && !jab.akhir_menjabat)
+          ?.sort((a, b) => {
+            try {
+              const dateA = new Date(a.awal_menjabat.split('-').reverse().join('-'))
+              const dateB = new Date(b.awal_menjabat.split('-').reverse().join('-'))
+              return dateB.getTime() - dateA.getTime()
+            } catch {
+              return 0
+            }
+          })[0]
+
+        return latestJabatan ? calculateDurationInMonths(latestJabatan.awal_menjabat) : 0
+      })
+      .filter(tenure => tenure > 0)
 
     const avgTenureMonths = activeTenures.length > 0 
       ? Math.round(activeTenures.reduce((sum, t) => sum + t, 0) / activeTenures.length)
@@ -988,9 +1055,9 @@ export default function JabatanAnalytics({
       positionChanges,
       longestTenure
     }
-  }
+  }, [getFilteredAccounts, calculateDurationInMonths])
 
-  const stats = getSummaryStats()
+  const stats = getSummaryStats
 
   const clearFilters = () => {
     setSelectedEmployee(null)
@@ -1001,17 +1068,15 @@ export default function JabatanAnalytics({
 
   return (
     <div className="space-y-6">
-    
-
-      {/* Summary Cards */}
+      {/* Kartu Ringkasan */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="hover:shadow-lg transition-all duration-300 hover:scale-105 bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-blue-700">Total Employees</p>
+                <p className="text-sm font-medium text-blue-700">Total Pegawai</p>
                 <p className="text-2xl font-bold text-blue-600">{stats.totalEmployees}</p>
-                <p className="text-xs text-blue-600 mt-1">With position data</p>
+                <p className="text-xs text-blue-600 mt-1">Dengan data jabatan</p>
               </div>
               <Users className="w-8 h-8 text-blue-600" />
             </div>
@@ -1022,9 +1087,9 @@ export default function JabatanAnalytics({
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-green-700">Active Positions</p>
+                <p className="text-sm font-medium text-green-700">Jabatan Aktif</p>
                 <p className="text-2xl font-bold text-green-600">{stats.activePositions}</p>
-                <p className="text-xs text-green-600 mt-1">Currently occupied</p>
+                <p className="text-xs text-green-600 mt-1">Saat ini ditempati</p>
               </div>
               <UserCheck className="w-8 h-8 text-green-600" />
             </div>
@@ -1035,9 +1100,9 @@ export default function JabatanAnalytics({
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-purple-700">Unique Positions</p>
+                <p className="text-sm font-medium text-purple-700">Jabatan Unik</p>
                 <p className="text-2xl font-bold text-purple-600">{stats.uniquePositions}</p>
-                <p className="text-xs text-purple-600 mt-1">Different roles</p>
+                <p className="text-xs text-purple-600 mt-1">Peran berbeda</p>
               </div>
               <Award className="w-8 h-8 text-purple-600" />
             </div>
@@ -1048,9 +1113,9 @@ export default function JabatanAnalytics({
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-orange-700">Avg Tenure</p>
+                <p className="text-sm font-medium text-orange-700">Rata-rata Masa Jabatan</p>
                 <p className="text-2xl font-bold text-orange-600">{stats.avgTenureMonths}</p>
-                <p className="text-xs text-orange-600 mt-1">Months in current role</p>
+                <p className="text-xs text-orange-600 mt-1">Bulan di peran saat ini</p>
               </div>
               <Clock className="w-8 h-8 text-orange-600" />
             </div>
@@ -1058,15 +1123,15 @@ export default function JabatanAnalytics({
         </Card>
       </div>
 
-      {/* Key Insights Cards */}
+      {/* Kartu Wawasan Utama */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card className="hover:shadow-lg transition-all duration-300 bg-gradient-to-br from-emerald-50 to-teal-50 border-emerald-200">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-emerald-700">Position Changes</p>
+                <p className="text-sm font-medium text-emerald-700">Perubahan Jabatan</p>
                 <p className="text-2xl font-bold text-emerald-600">{stats.positionChanges}</p>
-                <p className="text-xs text-emerald-600 mt-1">Employees with career progression</p>
+                <p className="text-xs text-emerald-600 mt-1">Pegawai dengan progres karir</p>
               </div>
               <TrendingUp className="w-8 h-8 text-emerald-600" />
             </div>
@@ -1077,9 +1142,9 @@ export default function JabatanAnalytics({
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-indigo-700">Longest Tenure</p>
+                <p className="text-sm font-medium text-indigo-700">Masa Jabatan Terpanjang</p>
                 <p className="text-2xl font-bold text-indigo-600">{stats.longestTenure}</p>
-                <p className="text-xs text-indigo-600 mt-1">Months in current position</p>
+                <p className="text-xs text-indigo-600 mt-1">Bulan di jabatan saat ini</p>
               </div>
               <Target className="w-8 h-8 text-indigo-600" />
             </div>
@@ -1087,86 +1152,86 @@ export default function JabatanAnalytics({
         </Card>
       </div>
 
-      {/* Charts Grid */}
+      {/* Grid Grafik */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Current Position Distribution */}
+        {/* Distribusi Jabatan Saat Ini */}
         <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-blue-50 border-blue-200">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
               <BarChart3 className="w-5 h-5 text-blue-600" />
-              Current Position Distribution
+              Distribusi Jabatan Saat Ini
             </CardTitle>
             <CardDescription className="text-sm">
-              Click bars to filter by position type. Shows current active positions only.
+              Klik batang untuk filter berdasarkan jenis jabatan. Menampilkan hanya jabatan aktif saat ini.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Chart
-              options={getJabatanDistribution().options}
-              series={getJabatanDistribution().series}
+              options={getJabatanDistribution.options}
+              series={getJabatanDistribution.series}
               type="bar"
               height={350}
             />
           </CardContent>
         </Card>
 
-        {/* Position Level Analysis */}
+        {/* Analisis Level Jabatan */}
         <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-purple-50 border-purple-200">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Award className="w-5 h-5 text-purple-600" />
-              Position Level Distribution
+              Distribusi Level Jabatan
             </CardTitle>
             <CardDescription className="text-sm">
-              Organizational hierarchy distribution based on current positions.
+              Distribusi hierarki organisasi berdasarkan jabatan saat ini.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Chart
-              options={getPositionLevelAnalysis().options}
-              series={getPositionLevelAnalysis().series}
+              options={getPositionLevelAnalysis.options}
+              series={getPositionLevelAnalysis.series}
               type="donut"
               height={350}
             />
           </CardContent>
         </Card>
 
-        {/* Employee Position History */}
+        {/* Riwayat Jabatan Pegawai */}
         <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-green-50 border-green-200">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Users className="w-5 h-5 text-green-600" />
-              Employee Position History
+              Riwayat Jabatan Pegawai
             </CardTitle>
             <CardDescription className="text-sm">
-              Click bars to filter by employee. Shows total vs active positions per person.
+              Klik batang untuk filter berdasarkan pegawai. Menampilkan total vs jabatan aktif per orang.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Chart
-              options={getEmployeeJabatanTimeline().options}
-              series={getEmployeeJabatanTimeline().series}
+              options={getEmployeeJabatanTimeline.options}
+              series={getEmployeeJabatanTimeline.series}
               type="bar"
               height={350}
             />
           </CardContent>
         </Card>
 
-        {/* Organizational Unit Distribution */}
+        {/* Distribusi Unit Organisasi */}
         <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-indigo-50 border-indigo-200">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
               <MapPin className="w-5 h-5 text-indigo-600" />
-              Unit Distribution
+              Distribusi Unit
             </CardTitle>
             <CardDescription className="text-sm">
-              Distribution of employees across organizational units.
+              Distribusi pegawai di berbagai unit organisasi.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Chart
-              options={getUnitDistribution().options}
-              series={getUnitDistribution().series}
+              options={getUnitDistribution.options}
+              series={getUnitDistribution.series}
               type="donut"
               height={350}
             />
@@ -1174,44 +1239,44 @@ export default function JabatanAnalytics({
         </Card>
       </div>
 
-      {/* Second Row Charts */}
+      {/* Baris Kedua Grafik */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Career Movement Trends */}
+        {/* Tren Pergerakan Karir */}
         <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-yellow-50 border-yellow-200">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
               <TrendingUp className="w-5 h-5 text-yellow-600" />
-              Appointment Trends
+              Tren Pengangkatan
             </CardTitle>
             <CardDescription className="text-sm">
-              Timeline of new appointments and position changes over time.
+              Timeline pengangkatan baru dan perubahan jabatan sepanjang waktu.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Chart
-              options={getAppointmentTrends().options}
-              series={getAppointmentTrends().series}
+              options={getAppointmentTrends.options}
+              series={getAppointmentTrends.series}
               type="area"
               height={350}
             />
           </CardContent>
         </Card>
 
-        {/* Average Tenure by Position */}
+        {/* Rata-rata Masa Jabatan berdasarkan Posisi */}
         <Card className="hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-red-50 border-red-200">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Clock className="w-5 h-5 text-red-600" />
-              Average Tenure by Position
+              Rata-rata Masa Jabatan berdasarkan Posisi
             </CardTitle>
             <CardDescription className="text-sm">
-              Average duration employees spend in each position type.
+              Rata-rata durasi pegawai dalam setiap jenis jabatan.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Chart
-              options={getAverageTenureByPosition().options}
-              series={getAverageTenureByPosition().series}
+              options={getAverageTenureByPosition.options}
+              series={getAverageTenureByPosition.series}
               type="bar"
               height={350}
             />
@@ -1219,42 +1284,42 @@ export default function JabatanAnalytics({
         </Card>
       </div>
 
-      {/* Detailed Insights Section */}
+      {/* Bagian Wawasan Detail */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Position Insights */}
+        {/* Wawasan Jabatan */}
         <Card className="hover:shadow-lg transition-all duration-300 bg-gradient-to-br from-slate-50 to-gray-50 border-slate-200">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
               <Activity className="w-5 h-5 text-slate-600" />
-              Position Insights
+              Wawasan Jabatan
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="text-center p-3 bg-blue-50 rounded-lg border border-blue-200">
                 <p className="text-lg font-bold text-blue-600">{stats.uniquePositions}</p>
-                <p className="text-xs text-blue-700">Unique Position Types</p>
+                <p className="text-xs text-blue-700">Jenis Jabatan Unik</p>
               </div>
               <div className="text-center p-3 bg-green-50 rounded-lg border border-green-200">
                 <p className="text-lg font-bold text-green-600">{stats.uniqueUnits}</p>
-                <p className="text-xs text-green-700">Organizational Units</p>
+                <p className="text-xs text-green-700">Unit Organisasi</p>
               </div>
             </div>
             <div className="space-y-2">
               <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Position Utilization Rate</span>
+                <span className="text-sm text-gray-600">Tingkat Pemanfaatan Jabatan</span>
                 <span className="font-semibold text-gray-800">
                   {stats.totalPositions > 0 ? ((stats.activePositions / stats.totalPositions) * 100).toFixed(1) : 0}%
                 </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Career Mobility Rate</span>
+                <span className="text-sm text-gray-600">Tingkat Mobilitas Karir</span>
                 <span className="font-semibold text-gray-800">
                   {stats.totalEmployees > 0 ? ((stats.positionChanges / stats.totalEmployees) * 100).toFixed(1) : 0}%
                 </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Avg Positions per Employee</span>
+                <span className="text-sm text-gray-600">Rata-rata Jabatan per Pegawai</span>
                 <span className="font-semibold text-gray-800">
                   {stats.totalEmployees > 0 ? (stats.totalPositions / stats.totalEmployees).toFixed(1) : 0}
                 </span>
@@ -1263,42 +1328,42 @@ export default function JabatanAnalytics({
           </CardContent>
         </Card>
 
-        {/* Tenure Analysis */}
+        {/* Analisis Masa Jabatan */}
         <Card className="hover:shadow-lg transition-all duration-300 bg-gradient-to-br from-amber-50 to-yellow-50 border-amber-200">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
               <Clock className="w-5 h-5 text-amber-600" />
-              Tenure Analysis
+              Analisis Masa Jabatan
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="text-center p-3 bg-orange-50 rounded-lg border border-orange-200">
                 <p className="text-lg font-bold text-orange-600">{stats.avgTenureMonths}</p>
-                <p className="text-xs text-orange-700">Avg Tenure (Months)</p>
+                <p className="text-xs text-orange-700">Rata-rata Masa Jabatan (Bulan)</p>
               </div>
               <div className="text-center p-3 bg-red-50 rounded-lg border border-red-200">
                 <p className="text-lg font-bold text-red-600">{stats.longestTenure}</p>
-                <p className="text-xs text-red-700">Longest Tenure (Months)</p>
+                <p className="text-xs text-red-700">Masa Jabatan Terpanjang (Bulan)</p>
               </div>
             </div>
             <div className="space-y-2">
               <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Avg Tenure (Years)</span>
+                <span className="text-sm text-gray-600">Rata-rata Masa Jabatan (Tahun)</span>
                 <span className="font-semibold text-gray-800">
                   {(stats.avgTenureMonths / 12).toFixed(1)}
                 </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Longest Tenure (Years)</span>
+                <span className="text-sm text-gray-600">Masa Jabatan Terpanjang (Tahun)</span>
                 <span className="font-semibold text-gray-800">
                   {(stats.longestTenure / 12).toFixed(1)}
                 </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Position Stability</span>
+                <span className="text-sm text-gray-600">Stabilitas Jabatan</span>
                 <span className="font-semibold text-gray-800">
-                  {stats.avgTenureMonths >= 24 ? "High" : stats.avgTenureMonths >= 12 ? "Medium" : "Low"}
+                  {stats.avgTenureMonths >= 24 ? "Tinggi" : stats.avgTenureMonths >= 12 ? "Sedang" : "Rendah"}
                 </span>
               </div>
             </div>
@@ -1306,15 +1371,15 @@ export default function JabatanAnalytics({
         </Card>
       </div>
 
-      {/* Additional Insights */}
+      {/* Wawasan Tambahan */}
       <Card className="hover:shadow-lg transition-all duration-300 bg-gradient-to-br from-teal-50 to-cyan-50 border-teal-200">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
             <Target className="w-5 h-5 text-teal-600" />
-            Key Performance Indicators
+            Indikator Kinerja Utama
           </CardTitle>
           <CardDescription>
-            Strategic insights for human resource management and organizational development.
+            Wawasan strategis untuk manajemen sumber daya manusia dan pengembangan organisasi.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -1323,45 +1388,45 @@ export default function JabatanAnalytics({
               <div className="text-2xl font-bold text-teal-600 mb-2">
                 {stats.totalEmployees > 0 ? ((stats.positionChanges / stats.totalEmployees) * 100).toFixed(0) : 0}%
               </div>
-              <p className="text-sm font-medium text-teal-700 mb-1">Career Progression Rate</p>
-              <p className="text-xs text-gray-600">Employees who have changed positions</p>
+              <p className="text-sm font-medium text-teal-700 mb-1">Tingkat Progres Karir</p>
+              <p className="text-xs text-gray-600">Pegawai yang pernah berganti jabatan</p>
             </div>
             
             <div className="text-center p-4 bg-white rounded-lg border border-teal-100 shadow-sm">
               <div className="text-2xl font-bold text-teal-600 mb-2">
                 {stats.totalPositions > 0 ? ((stats.activePositions / stats.totalPositions) * 100).toFixed(0) : 0}%
               </div>
-              <p className="text-sm font-medium text-teal-700 mb-1">Position Fill Rate</p>
-              <p className="text-xs text-gray-600">Currently active vs total positions</p>
+              <p className="text-sm font-medium text-teal-700 mb-1">Tingkat Pengisian Jabatan</p>
+              <p className="text-xs text-gray-600">Saat ini aktif vs total jabatan</p>
             </div>
             
             <div className="text-center p-4 bg-white rounded-lg border border-teal-100 shadow-sm">
               <div className="text-2xl font-bold text-teal-600 mb-2">
                 {stats.totalEmployees > 0 ? (stats.totalPositions / stats.totalEmployees).toFixed(1) : 0}
               </div>
-              <p className="text-sm font-medium text-teal-700 mb-1">Position Diversity</p>
-              <p className="text-xs text-gray-600">Average positions per employee</p>
+              <p className="text-sm font-medium text-teal-700 mb-1">Keberagaman Jabatan</p>
+              <p className="text-xs text-gray-600">Rata-rata jabatan per pegawai</p>
             </div>
           </div>
           
           <div className="mt-6 p-4 bg-gradient-to-r from-teal-100 to-cyan-100 rounded-lg border border-teal-200">
-            <h4 className="font-semibold text-teal-800 mb-2">Strategic Recommendations</h4>
+            <h4 className="font-semibold text-teal-800 mb-2">Rekomendasi Strategis</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
               <div>
-                <p className="font-medium text-teal-700">• Succession Planning</p>
-                <p className="text-teal-600 text-xs">Focus on positions with high tenure for knowledge transfer</p>
+                <p className="font-medium text-teal-700">• Perencanaan Suksesi</p>
+                <p className="text-teal-600 text-xs">Fokus pada jabatan dengan masa kerja tinggi untuk transfer pengetahuan</p>
               </div>
               <div>
-                <p className="font-medium text-teal-700">• Career Development</p>
-                <p className="text-teal-600 text-xs">Create pathways for employees without position changes</p>
+                <p className="font-medium text-teal-700">• Pengembangan Karir</p>
+                <p className="text-teal-600 text-xs">Buat jalur untuk pegawai tanpa perubahan jabatan</p>
               </div>
               <div>
-                <p className="font-medium text-teal-700">• Resource Optimization</p>
-                <p className="text-teal-600 text-xs">Balance workload across organizational units</p>
+                <p className="font-medium text-teal-700">• Optimalisasi Sumber Daya</p>
+                <p className="text-teal-600 text-xs">Seimbangkan beban kerja di seluruh unit organisasi</p>
               </div>
               <div>
-                <p className="font-medium text-teal-700">• Retention Strategy</p>
-                <p className="text-teal-600 text-xs">Monitor employees with short tenure for engagement</p>
+                <p className="font-medium text-teal-700">• Strategi Retensi</p>
+                <p className="text-teal-600 text-xs">Pantau pegawai dengan masa jabatan pendek untuk keterlibatan</p>
               </div>
             </div>
           </div>
