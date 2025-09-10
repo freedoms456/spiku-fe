@@ -62,7 +62,7 @@ const DEPARTMENTS = {
     borderColor: 'border-red-200'   
   },
   pt: {      
-    name: 'Pengelola Tim',      
+    name: 'Pengendali Teknis',      
     color: 'bg-orange-500',     
     bgColor: 'bg-orange-50',     
     borderColor: 'border-orange-200'   
