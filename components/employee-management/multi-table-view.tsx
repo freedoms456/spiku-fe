@@ -493,8 +493,18 @@ export default function MultiTableView({ globalSearchQuery = "" }: MultiTableVie
     const limit = Number.parseInt(entriesPerPage)
     return data.slice(0, limit)
   }
-  
 
+  const ActionButton = ({ id, label = "Lihat Data Pegawai" }) => (
+    <Button 
+      size="sm" 
+      variant="outline"
+      onClick={() => window.open(`/pegawai/${id}`, '_blank')}
+      className="flex items-center gap-1"
+    >
+      <Eye className="w-3 h-3" />
+      {label}
+    </Button>
+  );
   
 
   const renderTableControls = () => (
@@ -871,6 +881,7 @@ export default function MultiTableView({ globalSearchQuery = "" }: MultiTableVie
                       <TableHead>JP</TableHead>
                       <TableHead>Jenis</TableHead>
                       <TableHead>Tahun</TableHead>
+                      <TableHead>Aksi</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -890,6 +901,7 @@ export default function MultiTableView({ globalSearchQuery = "" }: MultiTableVie
                           <TableCell className="max-w-[200px] truncate" title={diklat.tahun}>
                             {diklat.tahun}
                           </TableCell>
+                          <TableCell><ActionButton id={diklat.account_id} /></TableCell>
                         </TableRow>
                       ))
                     ))}
@@ -928,12 +940,12 @@ export default function MultiTableView({ globalSearchQuery = "" }: MultiTableVie
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Employee</TableHead>
-                      <TableHead>Certification</TableHead>
+                      <TableHead>Pegawai</TableHead>
                       <TableHead>Issuer</TableHead>
-                      <TableHead>Issue Date</TableHead>
-                      <TableHead>Expiry Date</TableHead>
+                      <TableHead>Tanggal Sertifikasi</TableHead>
+                      <TableHead>Tanggal Sertifikasi Berakhir</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Aksi</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -946,7 +958,6 @@ export default function MultiTableView({ globalSearchQuery = "" }: MultiTableVie
                                 <TableCell className="font-medium">
                                   {accounts.find((acc) => acc.id === cert.account_id)?.account_name}
                                 </TableCell>
-                                <TableCell className="text-blue-600">{cert.certification_nama}</TableCell>
                                 <TableCell>{cert.name}</TableCell>
                                 <TableCell>{cert.tanggal_sertifikasi}</TableCell>
                                 <TableCell>{cert.masa_berlaku}</TableCell>
@@ -968,6 +979,7 @@ export default function MultiTableView({ globalSearchQuery = "" }: MultiTableVie
                                     : "Expired"}
                                 </Badge>
                                 </TableCell>
+                                <TableCell><ActionButton id={cert.account_id} /></TableCell>
                               </TableRow>
                             )
                         )
@@ -1005,10 +1017,11 @@ export default function MultiTableView({ globalSearchQuery = "" }: MultiTableVie
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Employee</TableHead>
-                      <TableHead>Position</TableHead>
-                      <TableHead>Start Date</TableHead>
-                      <TableHead>End Date</TableHead>
+                      <TableHead>Nama Pegawai</TableHead>
+                      <TableHead>Posisi</TableHead>
+                      <TableHead>Mulai Menjabat</TableHead>
+                      <TableHead>Akhir Menjabat</TableHead>
+                      <TableHead>Aksi</TableHead>
                  
                     </TableRow>
                   </TableHeader>
@@ -1033,6 +1046,7 @@ export default function MultiTableView({ globalSearchQuery = "" }: MultiTableVie
                                   <TableCell className="text-blue-600">{latestJabatan.name}</TableCell>
                                   <TableCell>{latestJabatan.awal_menjabat}</TableCell>
                                   <TableCell>{latestJabatan.akhir_menjabat}</TableCell>
+                                  <TableCell><ActionButton id={latestJabatan.account_id} /></TableCell>
                                 </TableRow>
                               )
                             )
@@ -1074,6 +1088,7 @@ export default function MultiTableView({ globalSearchQuery = "" }: MultiTableVie
                       <TableHead>Tanggal Masuk</TableHead>
                       {/* <TableHead>Tanggal Keluar</TableHead> */}
                       <TableHead>Lama Penempatan</TableHead>
+                      <TableHead>Aksi</TableHead>
                 
                     </TableRow>
                   </TableHeader>
@@ -1116,6 +1131,7 @@ export default function MultiTableView({ globalSearchQuery = "" }: MultiTableVie
                               ? daysDifference(penempatanAktif.tanggal_masuk)
                               : "-"}
                           </TableCell>
+                          <TableCell><ActionButton id={penempatanAktif.account_id} /></TableCell>
                         </TableRow>
                       );
                       })}
@@ -1156,6 +1172,7 @@ export default function MultiTableView({ globalSearchQuery = "" }: MultiTableVie
                       <TableHead>Tugas</TableHead>
                       <TableHead>Tanggal Mulai</TableHead>
                       <TableHead>Tanggal Selesai</TableHead>
+                      <TableHead>Aksi</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1171,6 +1188,7 @@ export default function MultiTableView({ globalSearchQuery = "" }: MultiTableVie
                             <TableCell>{perbantuan.deskripsi || "-"}</TableCell>
                             <TableCell>{perbantuan.tanggal_masuk}</TableCell>
                             <TableCell>{perbantuan.tanggal_keluar || "-"}</TableCell>
+                            <TableCell><ActionButton id={perbantuan.account_id} /></TableCell>
                           </TableRow>
                         ))
                       )}
@@ -1213,6 +1231,7 @@ export default function MultiTableView({ globalSearchQuery = "" }: MultiTableVie
                       <TableHead>Jenis Pemeriksaan</TableHead>
                       <TableHead>Peran</TableHead>
                       <TableHead>Tanggal Pemeriksaan</TableHead>
+                      <TableHead>Aksi</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1228,6 +1247,7 @@ export default function MultiTableView({ globalSearchQuery = "" }: MultiTableVie
                             <TableCell>{pemeriksaan.jenis_pemeriksaan || "-"}</TableCell>
                             <TableCell>{pemeriksaan.pekerjaan}</TableCell>
                             <TableCell>{pemeriksaan.tanggal_pemeriksaan || "-"}</TableCell>
+                            <TableCell><ActionButton id={pemeriksaan.account_id} /></TableCell>
                           </TableRow>
                         ))
                       )}

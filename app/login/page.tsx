@@ -38,8 +38,10 @@ export default function LoginPage() {
       // simpan user di localStorage
       localStorage.setItem("user", JSON.stringify(res.data));
 
-      
-      const accounts = await api.get("/api/accounts", { withCredentials: true });
+      // Prod
+      // const accounts = await api.get("/api/accounts", { withCredentials: true });
+      // DEV
+      const accounts = await api.get("/api/accountsdevss", { withCredentials: true });
 
       localStorage.setItem("accounts", JSON.stringify(accounts.data));
 

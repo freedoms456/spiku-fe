@@ -210,7 +210,8 @@ export default function TeamFormationBuilder() {
         const normalizedExperience = emp.experience / Math.max(...employees.map(e => e.experience))
         
         const compositeScore = (normalizedSkill * 0.6) + (normalizedWorkload * 0.3) + (normalizedExperience * 0.1)
-        
+       
+        console.log(compositeScore)
         return {
           employeeId: emp.id,
           employee: emp,
@@ -288,7 +289,7 @@ export default function TeamFormationBuilder() {
   const addCustomPosition = useCallback(() => {
     setCustomPositions([...customPositions, { role: 'sipil', name: 'New Position' }])
   }, [customPositions])
-
+  console.log(employeeScores)
   // Apply template to team
   const applyTemplate = useCallback((teamId, templateKey) => {
     const template = TEAM_TEMPLATES[templateKey]
@@ -383,6 +384,8 @@ export default function TeamFormationBuilder() {
       const skillRanking = employeeScores[role] || []
       const rolePositions = allPositionsByRole[role]
       
+
+
       rolePositions.forEach(({ teamId, position }) => {
         const team = newTeams.find(t => t.id === teamId)
         if (!team) return
