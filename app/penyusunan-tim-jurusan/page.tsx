@@ -169,13 +169,13 @@ export default function DepartmentTeamBuilder() {
   // Transform account ke format employee
   const transformToEmployeeFormat = useCallback((account) => {
     let department = 'lainnya'
-    const latestJabatan = account.account_jabatan[account.account_jabatan.length - 1]
+    const latestJabatan = getLatestJabatan(account.account_jabatan);
 
     const jabatanList = account.account_jabatan.filter(
       (j) => j.name?.toLowerCase().includes("pemeriksa")
     );
-
-    if (jabatanList.length > 0) {
+      // console.log(jabatanList)
+      if (jabatanList.length > 0) {
       const earliest = jabatanList.reduce((min, curr) => {
         return new Date(curr.awal_menjabat) < new Date(min.awal_menjabat) ? curr : min;
       });
@@ -206,7 +206,7 @@ export default function DepartmentTeamBuilder() {
     
     let unit = "Unit Tidak Tersedia"
     if (account.account_jabatan && account.account_jabatan.length > 0) {
-      const latestJabatan = account.account_jabatan[account.account_jabatan.length - 1]
+      const latestJabatan = getLatestJabatan(account.account_jabatan);
       unit = latestJabatan.name
     }
     
@@ -219,7 +219,32 @@ export default function DepartmentTeamBuilder() {
       unit: unit
     }
   }, [categorizeDepartment])
+  const parseDDMMYYYY = (dateString) => {
+    if (!dateString) return new Date(0); // Return tanggal minimal jika tidak ada
+    
+    const parts = dateString.split('-');
+    if (parts.length !== 3) return new Date(0);
+    
+    const day = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1; // Bulan dimulai dari 0
+    const year = parseInt(parts[2], 10);
+    
+    return new Date(year, month, day);
+  };
 
+  const getLatestJabatan = (accountJabatan) => {
+    if (!accountJabatan || accountJabatan.length === 0) return null;
+    
+    // Urutkan jabatan berdasarkan tanggal awal_menjabat (dari yang terbaru)
+    const sortedJabatan = [...accountJabatan].sort((a, b) => {
+      const dateA = parseDDMMYYYY(a.awal_menjabat);
+      const dateB = parseDDMMYYYY(b.awal_menjabat);
+      return dateB - dateA; // Descending (terbaru ke terlama)
+    });
+    
+    return sortedJabatan[0]; // Jabatan paling terbaru
+  };
+  
   // Load data dari localStorage
   const loadEmployeesFromStorage = useCallback(() => {
     try {
@@ -245,7 +270,7 @@ export default function DepartmentTeamBuilder() {
           return false
         }
         
-        const latestJabatan = account.account_jabatan[account.account_jabatan.length - 1]
+        const latestJabatan = getLatestJabatan(account.account_jabatan);
         const jabatanName = latestJabatan.name ? latestJabatan.name.toLowerCase() : ''
         
         return jabatanName.includes('pemeriksa') 
