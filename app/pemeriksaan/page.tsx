@@ -6,6 +6,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import Link from 'next/link';
+
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -18,6 +20,7 @@ import {
   MapPin,
   Building,
   User,
+  ArrowRight,
   BookOpen,
   Star,
   CheckCircle,
@@ -434,6 +437,26 @@ export default function TeamFormationInsights() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
       <Navbar showSearchBar={false}/>
+      
+      {/* Button Penyusunan Tim - Sticky di bawah navbar */}
+    <div className="sticky top-16 z-30 bg-white border-b border-gray-200 shadow-sm">
+      <div className="max-w-7xl mx-auto px-6 py-3">
+      <Link href="/penyusunan-tim-jurusan">
+      <div className="group cursor-pointer border-2 border-blue-500 hover:border-blue-600 bg-white rounded-lg p-2 shadow-sm hover:shadow-md transition-all duration-300">
+        <div className="flex items-center gap-4">
+          <div className="p-2 bg-blue-100 rounded-lg group-hover:bg-blue-200 transition-colors">
+            <Users className="w-6 h-3 text-blue-600" />
+          </div>
+          <div className="flex-1">
+            <p className="font-semibold text-gray-800">Coba Menyusun Tim</p>
+          </div>
+          <ArrowRight className="w-5 h-3 text-blue-600 group-hover:translate-x-1 transition-transform" />
+        </div>
+      </div>
+    </Link>
+      </div>
+    </div>
+
       <div className="max-w-7xl mx-auto p-6 space-y-8">
         {/* Header */}
         <div className="text-center space-y-4">
@@ -446,7 +469,9 @@ export default function TeamFormationInsights() {
           <p className="text-lg text-gray-600 max-w-3xl mx-auto">
             Analisis komprehensif komposisi dan kapabilitas tim pemeriksa berdasarkan jabatan, pendidikan, domisili, dan pengalaman
           </p>
-        </div>
+        </div> 
+
+ 
 
         {/* Filters Section */}
         <Card className="shadow-lg border-0 bg-white/80 backdrop-blur-sm">
